@@ -11,8 +11,14 @@ export interface CarArtSpec {
   noseFrac: number; // 0..1 nose height as a fraction of body height (sleek wedge → block)
   wheelR: number; // wheel radius
   wheelbasePx: number; // axle spacing
+  clearancePx: number; // ground clearance — gap under the chassis
   threeWheel: boolean; // one front wheel lifted
   spin: number; // wheel rotation (radians) — for the rolling animation
+}
+
+/** Body underside height above the ground, in px (shared by drawCar + the preview marker). */
+export function bodyBaseY(s: CarArtSpec): number {
+  return -(s.clearancePx + s.wheelR * 0.2);
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -31,6 +37,7 @@ export function carSpec(state: ControlState, pxPerIn: number, spin = 0): CarArtS
     noseFrac: lerp(0.26, 1.0, frac(state.body_cd, RANGES.body_cd)),
     wheelR: (0.42 + 0.16 * frac(state.wheel_mass_oz, RANGES.wheel_mass_oz)) * pxPerIn,
     wheelbasePx: state.wheelbase_in * pxPerIn,
+    clearancePx: state.ground_clearance_in * pxPerIn,
     threeWheel: state.wheels_count === 3,
     spin,
   };
@@ -74,7 +81,7 @@ export function drawCar(ctx: CanvasRenderingContext2D, s: CarArtSpec): void {
   const bodyBackX = -s.lengthPx / 2;
   const bodyFrontX = s.lengthPx / 2;
   const wheelCY = -s.wheelR;
-  const bodyBase = wheelCY - s.wheelR * 0.15; // body sits just above the axle line
+  const bodyBase = bodyBaseY(s); // body underside rides at the ground-clearance height
   const tailTop = bodyBase - s.heightPx;
   const noseTop = bodyBase - s.heightPx * s.noseFrac;
 

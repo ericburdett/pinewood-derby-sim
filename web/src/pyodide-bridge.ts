@@ -119,7 +119,10 @@ async function boot(onStatus: StatusCb): Promise<void> {
   const base = import.meta.env.BASE_URL;
   const indexURL = new URL(`${base}pyodide/`, window.location.href).href;
   onStatus("Loading the Python runtime…");
-  const mod = await import(/* @vite-ignore */ `${base}pyodide/pyodide.mjs`);
+  // Anchor the dynamic import to the document URL (indexURL), NOT a base-relative
+  // specifier: a bare `./pyodide/...` import resolves against the bundled module's
+  // location (/assets/), producing /assets/pyodide/ under a Pages subpath.
+  const mod = await import(/* @vite-ignore */ `${indexURL}pyodide.mjs`);
   const pyodide = await mod.loadPyodide({ indexURL });
 
   onStatus("Loading the physics engine…");

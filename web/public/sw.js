@@ -4,10 +4,20 @@
 // network requests of its own — it only intercepts and caches what the page already fetches
 // (AC-P1/AC-P3: nothing off-origin, no telemetry).
 /* eslint-disable no-undef */
-const CACHE = "pds-cache-v1";
+const CACHE = "pds-cache-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener("activate", (event) =>
+  event.waitUntil(
+    (async () => {
+      // Purge stale caches from older deploys so a bumped CACHE actually frees storage
+      // (and never serves a previous version's assets).
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await self.clients.claim();
+    })(),
+  ),
+);
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;

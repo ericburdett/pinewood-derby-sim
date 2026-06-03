@@ -2,7 +2,7 @@
 // every control change, using the SAME shared car art as the race (car-art.ts), so the car
 // you tune is the car you race. Adds a balance (centre-of-mass) marker and a rail line on
 // top. Pure presentation off ControlState — no physics, no I/O (AC-G1). Same-origin canvas.
-import { type CarArtSpec, carSpec, drawCar } from "./car-art";
+import { type CarArtSpec, bodyBaseY, carSpec, drawCar } from "./car-art";
 import type { ControlState } from "./types";
 
 const LIME = "#a3e635";
@@ -69,7 +69,7 @@ export class CarPreview {
     const { ctx } = this;
     const f = Math.max(0, Math.min(1, state.com_in / state.wheelbase_in));
     const comX = -spec.wheelbasePx / 2 + f * spec.wheelbasePx;
-    const bodyTop = -spec.wheelR * 1.15 - spec.heightPx;
+    const bodyTop = bodyBaseY(spec) - spec.heightPx;
     const my = bodyTop - 16;
     ctx.save();
     ctx.shadowColor = LIME;

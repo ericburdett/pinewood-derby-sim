@@ -16,6 +16,7 @@ const MARGIN_R = 46; // room for the finish flag past the finish line
 const TOP_PAD = 64; // room above the ramp for the staged car's height + uphill rise
 const LANE_THICK = 15; // beam depth (3-D edge)
 const TRACK_PX_PER_IN = 9; // car scale on the track (sized so it fits the lane with margins)
+const STAGING_PX = 96; // ramp drawn this far uphill past the start gate, so the staged car rests on track
 const WHEEL_ROLL_RADIUS_M = 0.0151; // for wheel-spin rate (≈ 0.595 in)
 const MAX_PLAYBACK_S = 4;
 const TIP_DURATION_MS = 1500;
@@ -93,17 +94,22 @@ export class RaceAnimator {
     const yr = this.sy(ramp);
     const xt = this.sx(total);
     const yt = this.sy(total);
+    // Staging extension: continue the ramp surface UP-hill past the start line so the car —
+    // held at the gate with its body trailing back-uphill — rests on track instead of floating.
+    const a = this.track.ramp_angle_rad;
+    const xs = x0 - STAGING_PX * Math.cos(a);
+    const ys = y0 - STAGING_PX * Math.sin(a);
 
     // Beam (solid lane with a 3-D front face).
     ctx.beginPath();
-    ctx.moveTo(x0, y0);
+    ctx.moveTo(xs, ys);
     ctx.lineTo(xr, yr);
     ctx.lineTo(xt, yt);
     ctx.lineTo(xt, yt + LANE_THICK);
     ctx.lineTo(xr, yr + LANE_THICK);
-    ctx.lineTo(x0, y0 + LANE_THICK);
+    ctx.lineTo(xs, ys + LANE_THICK);
     ctx.closePath();
-    const beam = ctx.createLinearGradient(0, y0 - 6, 0, yt + LANE_THICK);
+    const beam = ctx.createLinearGradient(0, ys - 6, 0, yt + LANE_THICK);
     beam.addColorStop(0, "#26405c");
     beam.addColorStop(0.5, "#1a2c41");
     beam.addColorStop(1, "#0c1726");
@@ -114,14 +120,14 @@ export class RaceAnimator {
     ctx.strokeStyle = "#4ea1ff";
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(x0, y0);
+    ctx.moveTo(xs, ys);
     ctx.lineTo(xr, yr);
     ctx.lineTo(xt, yt);
     ctx.stroke();
     ctx.strokeStyle = "rgba(163,230,53,0.7)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(x0, y0 - 3);
+    ctx.moveTo(xs, ys - 3);
     ctx.lineTo(xr, yr - 3);
     ctx.lineTo(xt, yt - 3);
     ctx.stroke();
