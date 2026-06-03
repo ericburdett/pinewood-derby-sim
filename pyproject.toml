@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pinewood-derby-sim"
+version = "0.0.0"
+description = "An interactive simulator that teaches kids the physics of building a fast pinewood derby car."
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=7", "pytest-cov", "ruff", "mypy"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=pinewood_derby --cov-report=term-missing"
+
+[tool.coverage.run]
+# Use Python 3.12's PEP 669 ``sys.monitoring`` measurement core instead of the legacy
+# ``sys.settrace`` core. settrace instruments every executed line process-wide, inflating
+# pure-Python hot loops ~50-60x — which made the engine's < 5 ms performance NFR
+# (PRD §7 / profile ``quality_bars.performance``) unmeasurable under the profile's default
+# ``uv run pytest`` (it runs with ``--cov`` in addopts). The sysmon core has near-zero
+# overhead on 3.12, so a single ``simulate()`` is timed at its true intrinsic cost while
+# coverage measurement is unchanged. Stdlib-only, no new dependency.
+core = "sysmon"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.mypy]
+strict = true
+files = ["src"]
+python_version = "3.12"
+
+# The profile typecheck gate runs the exact command ``uv run mypy .``; the explicit
+# ``.`` path overrides ``files`` above and type-checks the QA-owned ``tests/`` tree too
+# (WI3-F3). Behavioral tests legitimately introspect runtime-only attributes that the
+# typeshed stubs do not expose statically — e.g. asserting a class is a frozen dataclass
+# via ``cls.__dataclass_params__.frozen`` while iterating a heterogeneous tuple of
+# dataclass types (a union of ``type[...]`` → ``union-attr``). These are test-only
+# introspection patterns, not product code, so tolerate them in ``tests.*`` without
+# relaxing ``strict`` on the engine itself.
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+warn_unused_ignores = false
+disable_error_code = ["union-attr"]

@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "app": "pinewood-derby-sim",
+  "id": "0008-real-body-dimensions-drag-physics-legality-inspection",
+  "title": "Real body dimensions -> drag physics + legality inspection",
+  "status": "done",
+  "description": "Richer physics + a legality/inspection layer. Expose real body WIDTH and HEIGHT as design inputs and derive frontal area (= width x height) that feeds the engine's EXISTING drag model (F_drag = 1/2 rho Cd A_eff v^2, engine.py) - which already has a sub-linear effective-area calibration (A_eff proportional to A^0.5) explicitly built + tested (AC-ED1 / WI12-ADV-001) to keep aerodynamics the SMALLEST lever. So NO engine change is needed: the bridge computes frontal_area from real dimensions instead of the fixed 0.0028 m^2. Add LENGTH and GROUND CLEARANCE as legality-only inputs (not physics: ride height has negligible real aero effect at derby speeds, so it stays a clearance check, never a speed lever). New pure present.py legality_report() checks typical BSA rules (weight <= 5.0 oz [done], width <= 2.75 in, length <= 7 in, height limit, ground clearance >= 3/8 in) - rules VARY BY LEAGUE so the UI must show a 'check your pack's rules' disclaimer and keep weight as the one universal hard rule. UI: new width/height/length/clearance sliders, a live Inspection checklist panel (text+icon, not color-only), and the live car preview reflecting real height/length/clearance. RISK to validate during build: re-run the priority-order + adversarial tests at the LEGAL-MAX body size to confirm aero still can't out-rank weight/friction (the ^0.5 calibration should hold, but must be tested; cap slider ranges if needed). Spun off from 0003 discussion. NOTE: per user, being IMPLEMENTED DIRECTLY (test-verified, not via the build-loop) for speed, in parallel with this record. \u2014 IMPLEMENTED DIRECTLY & DONE 2026-06-03 (test-verified, not via the build-loop, per user request for speed): engine UNCHANGED \u2014 the bridge derives frontal_area = body_width x body_height feeding the engine's existing drag model; added pure present.legality_report() (weight + width/length/height/clearance) with 11 pytest incl. a priority-order guard proving aero stays the smallest lever even at the legal-max body (2.75x3.5 in, Cd 0.85 -> air only 1.7%). Web UI gained body width/height/length/ground-clearance sliders, a live Inspection panel (text+icon, not color-only, 'check your pack' disclaimer), and the car preview now reflects real height/length/clearance. Verified: 512 pytest + 24 Playwright green, ruff+mypy+tsc+eslint clean, prod build ok. Body width/height affect drag (physics); length/clearance are legality-only (ride height is NOT a speed lever \u2014 physically honest).",
+  "created_at": "2026-06-03T16:32:06.132188+00:00",
+  "updated_at": "2026-06-03T16:30:00+00:00",
+  "planning": {
+    "session_id": null
+  },
+  "prd_ref": null,
+  "trd_ref": null,
+  "backlog_ref": null,
+  "summary_ref": null,
+  "run_record_refs": [],
+  "changeset_refs": [],
+  "open_questions": []
+}

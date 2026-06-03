@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRD — Physics simulation engine</title>
+<style>
+:root { --ink:#1c2330; --muted:#5a6478; --line:#dfe3ea; --accent:#2563eb; --bg:#ffffff; --soft:#f6f8fb; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--soft); color:var(--ink);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+.page { max-width: 820px; margin: 32px auto; background:var(--bg); padding: 48px 56px;
+  border:1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+h1 { font-size: 26px; margin: 0 0 18px; padding-bottom: 12px; border-bottom: 2px solid var(--line); }
+h2 { font-size: 19px; margin: 30px 0 10px; color: var(--accent); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+p, li { color: var(--ink); }
+code { background: var(--soft); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size: 90%; }
+pre { background: var(--soft); border:1px solid var(--line); border-radius:8px; padding:14px; overflow-x:auto; }
+pre code { border:0; padding:0; background:none; }
+blockquote { margin: 14px 0; padding: 8px 16px; border-left: 4px solid var(--accent); background: var(--soft); color: var(--muted); }
+table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+th, td { border:1px solid var(--line); padding: 8px 11px; text-align:left; font-size: 14.5px; vertical-align: top; }
+th { background: var(--soft); }
+a { color: var(--accent); }
+hr { border:0; border-top:1px solid var(--line); margin: 26px 0; }
+@media print { body { background:#fff; } .page { border:0; box-shadow:none; margin:0; max-width:none; } }
+</style>
+</head>
+<body><div class="page">
+<h1 id="prd-pinewood-derby-physics-simulation-engine">PRD — Pinewood Derby Physics Simulation Engine</h1>
+<ul>
+<li><strong>App:</strong> pinewood-derby-sim</li>
+<li><strong>Feature:</strong> <code>0001-physics-engine</code></li>
+<li><strong>Status:</strong> approved (open questions resolved and user-approved 2026-06-02)</li>
+<li><strong>Author:</strong> Planner</li>
+<li><strong>Last updated:</strong> 2026-06-02</li>
+<li><strong>Grounding docs:</strong> <a href="../../profile.md"><code>profile.md</code></a> · <a href="../../docs/physics-spec.md"><code>docs/physics-spec.md</code></a>
+  (authoritative domain reference)</li>
+</ul>
+<blockquote>
+<p><strong>Scope note.</strong> This feature began as "weight + placement" but, per the product owner's decisions
+on 2026-06-02, now covers the <strong>full single-car physics engine</strong> from the engineering spec:
+weight, center-of-mass, wheels/rotational inertia, aerodynamic drag, axle friction, and
+alignment/rail behavior. The UI remains deferred. The directory/id was renamed
+<code>0001-weight-placement-engine</code> → <code>0001-physics-engine</code> on 2026-06-02 to match this scope.</p>
+</blockquote>
+<hr />
+<h2 id="1-problem-statement">1. Problem statement</h2>
+<p>The simulator's entire value rests on a <strong>physically correct engine</strong>: it teaches young men
+(12–17) the <em>right</em> way to build a fast pinewood derby car, in the <em>right priority order</em>. A
+"fun but wrong" result is the worst possible bug — it teaches bad engineering. Before any UI
+exists, we need a pure, deterministic, dependency-free engine that takes a car design and a track
+and predicts the run: the time, the outcome, the speeds, and a transparent energy breakdown that
+explains <em>why</em> the car performed as it did.</p>
+<p>This is also the first end-to-end exercise of the SDLC factory's TDD build loop, so the engine's
+contract must be precise enough that QA can write a failing test from every acceptance criterion.</p>
+<h2 id="2-target-users">2. Target users</h2>
+<ul>
+<li><strong>Immediate consumer:</strong> the SDLC build loop (QA, developer, adversarial reviewer, PO) — the
+  engine is validated entirely through tests in this feature.</li>
+<li><strong>Downstream consumer:</strong> the deferred pygame UI, which will drive <code>simulate(...)</code> from slider
+  toggles (spec §5) and animate the returned trajectory.</li>
+<li><strong>Ultimate audience:</strong> kids 12–17 (and parents/leaders) learning derby physics.</li>
+</ul>
+<h2 id="3-goals">3. Goals</h2>
+<ul>
+<li>A pure function <code>simulate(car, track, *, dt, seed) -&gt; RaceResult</code> that models all six levers from
+  the spec with <strong>directionally correct, real-world physics</strong>.</li>
+<li><strong>Educational priority order preserved:</strong> weight &amp; placement are the dominant levers; aerodynamics
+  is the smallest — the engine's numbers must reflect this ordering.</li>
+<li>Every result is <strong>explainable</strong>: a per-force energy ledger that closes (work-energy theorem).</li>
+<li><strong>Deterministic &amp; reproducible</strong>: fixed <code>dt</code> + seeded RNG → bit-identical results.</li>
+<li>Strictly typed (mypy <code>strict</code>), lint-clean (ruff), dependency-free (stdlib only), no I/O / no
+  network — safe for children and trivially testable.</li>
+</ul>
+<h2 id="4-non-goals-out-of-scope">4. Non-goals / out of scope</h2>
+<ul>
+<li>No UI, rendering, animation, or input widgets (pygame deferred to a later feature).</li>
+<li><strong>No translation, ranking, plain-language explanation, or "insights" in the engine.</strong> Per the
+  profile's <em>rich physics, simple presentation</em> constraint, all kid-facing framing — ranking the
+  losses ("where did your speed go?"), wording, coaching, visuals — is owned by the future
+  UI/explanation feature, not feature 0001. The engine emits <strong>raw, neutral physics data</strong> (energy
+  ledger, speeds, normal forces, trajectory) structured so that layer can derive those answers
+  trivially, but it does not compute or word them. (Decision 2026-06-02.)</li>
+<li>No persistence, accounts, leaderboards, networking, or telemetry.</li>
+<li>No multi-car / head-to-head racing in one call (single-car simulation; a heat is N calls).</li>
+<li>No CAD / cut-file / 3D-geometry modeling — principles, not part design.</li>
+<li>No real-hardware integration.</li>
+<li>Aerodynamics is modeled at the spec's fidelity (single <code>C_d</code>·<code>A</code> drag term), not CFD.</li>
+</ul>
+<h2 id="5-functional-requirements">5. Functional requirements</h2>
+<p>The engine accepts an immutable <strong>CarDesign</strong> with all six levers and an immutable validated
+<strong>Track</strong>, and returns an immutable <strong>RaceResult</strong>. Levers, per the spec:</p>
+<table>
+<thead>
+<tr>
+<th>Lever</th>
+<th>Input</th>
+<th>Spec ref</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total weight</td>
+<td><code>mass</code> (M)</td>
+<td>§1.1</td>
+</tr>
+<tr>
+<td>Weight placement</td>
+<td><code>com_distance_ahead_of_rear_axle</code> (d_COM)</td>
+<td>§4</td>
+</tr>
+<tr>
+<td>Wheels</td>
+<td>count <code>N</code> (3/4), per-wheel mass <code>m_w</code>, radii → moment of inertia <code>I</code></td>
+<td>§2.1, §2.2</td>
+</tr>
+<tr>
+<td>Aerodynamics</td>
+<td>drag coefficient <code>C_d</code>, frontal area <code>A</code></td>
+<td>§3.1</td>
+</tr>
+<tr>
+<td>Axle friction</td>
+<td>coefficient <code>μ_axle</code>, <code>r_axle</code>, <code>R_outer</code></td>
+<td>§3.2</td>
+</tr>
+<tr>
+<td>Alignment</td>
+<td><code>STRAIGHT</code> (seeded ping-pong) or <code>RAIL_RIDER</code> (constant)</td>
+<td>§3.3</td>
+</tr>
+</tbody>
+</table>
+<p>The run is computed by <strong>time-step Euler integration</strong> of <code>F_net = F_gravity − F_drag − F_axle −
+F_rail</code> over the track's piecewise geometry (ramp → smooth transition arc → flat), tracking linear
+and rotational kinetic energy.</p>
+<h2 id="6-acceptance-criteria-testable">6. Acceptance criteria (testable)</h2>
+<p>Each criterion is behavioral and machine-checkable; QA writes ≥1 failing test per criterion.
+"All else equal" means two <code>CarDesign</code>s identical except the named field, same track/dt/seed.</p>
+<h3 id="weight-m">Weight (M)</h3>
+<ul>
+<li><strong>AC-W1</strong> Within the stable placement zone, the <strong>heavier</strong> car finishes with a strictly smaller
+  <code>race_time_s</code> (more mass → more PE → faster).</li>
+<li><strong>AC-W2</strong> <code>mass ≤ 5.0 oz (141.748 g)</code> → <code>legal_weight = True</code>; <code>mass &gt; limit</code> → <code>legal_weight =
+  False</code> but the run is still simulated normally (the weight rule is reported, not enforced by
+  physics). [assumption A1]</li>
+<li><strong>AC-W3</strong> <code>mass ≤ 0</code> raises <code>ValueError</code>.</li>
+</ul>
+<h3 id="placement-d_com-stability-tradeoff">Placement (d_COM) &amp; stability tradeoff</h3>
+<ul>
+<li><strong>AC-P1</strong> Within the stable range, <strong>decreasing d_COM</strong> (shifting mass toward the rear) strictly
+  decreases <code>race_time_s</code> (rear bias sits higher on the ramp / pushes longer).</li>
+<li><strong>AC-P2</strong> A car with d_COM in the optimal zone <strong>[0.75 in, 1.0 in]</strong> finishes and is strictly
+  faster than the same car at d_COM = 1.25 in (forward = stable but slow). (spec §4.2)</li>
+<li><strong>AC-P3</strong> A car with <strong>d_COM &lt; 0.625 in</strong> returns <code>outcome = DNF</code> with <code>race_time_s = None</code>
+  (front normal force collapses → wobble/crash). This is the tradeoff: "more rear" stops helping
+  and becomes a failure. [assumption A2]</li>
+<li><strong>AC-P4</strong> On the flat, reported normal forces satisfy <code>N_f = M·g·(d_COM/L)</code> and
+  <code>N_r = M·g·(1 − d_COM/L)</code> within tolerance, with <code>N_f + N_r ≈ M·g</code>; <code>N_f → 0</code> as <code>d_COM → 0</code>.</li>
+<li><strong>AC-P5</strong> <code>d_COM</code> outside <code>(0, wheelbase)</code> raises <code>ValueError</code>.</li>
+</ul>
+<h3 id="wheels-n-i-m_w">Wheels (N, I, m_w)</h3>
+<ul>
+<li><strong>AC-WH1</strong> A <strong>3-wheels-touching</strong> car is strictly faster than the otherwise-identical 4-wheel
+  car (less rotational inertia + one less axle's friction). (spec §5)</li>
+<li><strong>AC-WH2</strong> <strong>Lightweight wheels</strong> (reduced <code>m_w</code>, up to 60%) yield a strictly smaller
+  <code>race_time_s</code> than standard wheels (lower <code>I</code> → more energy in linear KE). (spec §2.2)</li>
+<li><strong>AC-WH3</strong> Moment of inertia is computed as <code>I = ½·m_w·(R_outer² + R_inner²)</code>. Invalid wheel
+  geometry (<code>R_inner ≥ R_outer</code>, <code>r_axle ≥ R_outer</code>, any radius/mass ≤ 0) and <code>N ∉ {3, 4}</code> raise
+  <code>ValueError</code>.</li>
+</ul>
+<h3 id="aerodynamics-c_d-a">Aerodynamics (C_d, A)</h3>
+<ul>
+<li><strong>AC-A1</strong> A <strong>wedge</strong> body (<code>C_d = 0.20</code>) is strictly faster than a <strong>wood-block</strong> body
+  (<code>C_d = 0.85</code>), all else equal. (spec §3.1)</li>
+<li><strong>AC-A2</strong> The energy lost to drag (<code>energy.w_drag</code>) increases with <code>C_d</code>, with frontal area <code>A</code>,
+  and with flat-section length (drag bites more at higher speed on the flat).</li>
+<li><strong>AC-A3</strong> <code>C_d ≤ 0</code> or <code>frontal_area ≤ 0</code> raises <code>ValueError</code>.</li>
+</ul>
+<h3 id="axle-friction">Axle friction (μ)</h3>
+<ul>
+<li><strong>AC-F1</strong> <strong>Polished + graphite</strong> axles (<code>μ = 0.10</code>) yield a strictly smaller <code>race_time_s</code> than
+  unpolished/no-lube (<code>μ = 0.35</code>), all else equal. (spec §3.2)</li>
+<li><strong>AC-F2</strong> <code>F_axle = N_wheel·μ·(r_axle / R_outer)</code>; reported <code>energy.w_axle</code> increases with <code>μ</code>.
+  <code>μ &lt; 0</code> raises <code>ValueError</code>.</li>
+</ul>
+<h3 id="alignment-rail-seeded">Alignment / rail (seeded)</h3>
+<ul>
+<li><strong>AC-AL1</strong> A <strong>RAIL_RIDER</strong> car (constant <code>F_rail = 0.05 N</code>) is strictly faster than the
+  otherwise-identical <strong>STRAIGHT</strong> (ping-ponging) car, for a fixed seed. (spec §3.3, §5)</li>
+<li><strong>AC-AL2</strong> STRAIGHT-alignment rail friction is drawn from the seeded RNG within <code>[1.5, 3.0] N</code>;
+  reported <code>energy.w_rail</code> reflects it. An <strong>unstable</strong> d_COM amplifies rail friction (wobble
+  multiplier) per spec §4.2.</li>
+<li><strong>AC-AL3</strong> <strong>Determinism:</strong> identical <code>(car, track, dt, seed)</code> → a <strong>bit-identical</strong> <code>RaceResult</code>
+  across repeated calls (including the random ping-pong path). RAIL_RIDER results are
+  seed-independent.</li>
+</ul>
+<h3 id="track">Track</h3>
+<ul>
+<li><strong>AC-T1</strong> <code>Track</code> is an explicit validated input. A <strong>longer</strong> total track → longer
+  <code>race_time_s</code> for the same car; a <strong>steeper</strong> ramp angle (within <code>(0°, 90°)</code>) → faster time.</li>
+<li><strong>AC-T2</strong> <code>Track.angle_at(position)</code> returns the ramp angle on the ramp, <code>0</code> on the flat, and a
+  <strong>continuous, monotonic</strong> interpolation through the transition arc (no discontinuous jump). (spec
+  §1.2)</li>
+<li><strong>AC-T3</strong> Invalid track (any length ≤ 0, ramp angle ∉ <code>(0°, 90°)</code>, transition radius &lt; 0) raises
+  <code>ValueError</code>. A <code>STANDARD_TRACK</code> constant matching the spec (10 ft ramp @ 30°, ~32 ft flat) is
+  provided.</li>
+</ul>
+<h3 id="energy-physics-integrity-invariants">Energy / physics integrity (invariants)</h3>
+<ul>
+<li><strong>AC-E1</strong> <strong>Ledger closes:</strong> for a FINISHED run, <code>KE_total_final ≈ W_gravity − (W_drag + W_axle +
+  W_rail)</code> within relative tolerance <code>1e-6</code> (discrete work-energy theorem holds by construction).</li>
+<li><strong>AC-E2</strong> <code>KE_total = ½·M·v² + Σ ½·I·ω²</code> with <code>ω = v / R_outer</code>; the rotational fraction is <code>&gt; 0</code>
+  for massive wheels and <strong>decreases</strong> when wheels are lightened or a wheel is lifted (3-wheel).</li>
+<li><strong>AC-E3</strong> <strong>Convergence / numerical stability:</strong> halving <code>dt</code> changes <code>race_time_s</code> by <code>&lt; 1%</code>.</li>
+<li><strong>AC-E4</strong> Reported <code>W_gravity</code> equals the analytic PE drop <code>M·g·Δh_com</code> within a tolerance that
+  shrinks as <code>dt → 0</code>.</li>
+</ul>
+<h3 id="output-contract">Output contract</h3>
+<ul>
+<li><strong>AC-O1</strong> <code>simulate(...)</code> returns an <strong>immutable</strong> <code>RaceResult</code> with: <code>outcome</code>, <code>race_time_s</code>
+  (<code>None</code> iff not FINISHED), <code>exit_velocity</code> (end of ramp), <code>top_speed</code>, <code>finish_velocity</code>,
+  <code>energy</code> breakdown, <code>normal_forces</code> (<code>N_f</code>, <code>N_r</code>), <code>legal_weight</code>, and a sampled <code>trajectory</code>.
+  All numeric outputs are finite; velocities ≥ 0. [assumption A7 covers trajectory]</li>
+<li><strong>AC-O2</strong> FINISHED ⇒ <code>race_time_s &gt; 0</code> and finite; DNF ⇒ <code>race_time_s is None</code> and
+  <code>outcome = DNF</code>.</li>
+</ul>
+<h3 id="educational-correctness-domain">Educational correctness (domain)</h3>
+<ul>
+<li><strong>AC-ED1</strong> <strong>Priority order holds:</strong> starting from an all-levers-worst baseline car, the
+  <code>race_time_s</code> improvement from optimizing <strong>weight + placement</strong> is the <strong>largest</strong> of any single
+  lever category, and the improvement from the <strong>aerodynamic</strong> body change is the <strong>smallest</strong> —
+  matching the spec's documented teaching priorities. [assumption A6]</li>
+</ul>
+<h3 id="purity">Purity</h3>
+<ul>
+<li><strong>AC-PU1</strong> The engine performs <strong>no file I/O and no network access</strong>, holds no module-level
+  mutable state, and is composed of pure functions / frozen dataclasses (deterministic given
+  inputs).</li>
+</ul>
+<h2 id="7-non-functional-requirements">7. Non-functional requirements</h2>
+<table>
+<thead>
+<tr>
+<th>NFR</th>
+<th>Requirement</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Performance</td>
+<td>A single <code>simulate(...)</code> completes in <strong>&lt; 5 ms</strong></td>
+<td>timed test with margin (profile <code>quality_bars</code>)</td>
+</tr>
+<tr>
+<td>Determinism</td>
+<td>Fixed <code>dt</code> + seed ⇒ reproducible</td>
+<td>AC-AL3, AC-PU1</td>
+</tr>
+<tr>
+<td>Typing</td>
+<td><code>uv run mypy .</code> passes under <code>strict</code>; unit-typed boundary (no bare floats where grams/oz/inches could be confused)</td>
+<td>typecheck gate</td>
+</tr>
+<tr>
+<td>Lint</td>
+<td><code>uv run ruff check .</code> clean</td>
+<td>lint gate</td>
+</tr>
+<tr>
+<td>Coverage</td>
+<td><strong>≥ 90%</strong> on the engine; <strong>≥ 70%</strong> overall</td>
+<td><code>pytest --cov</code></td>
+</tr>
+<tr>
+<td>Dependencies</td>
+<td>Engine uses <strong>stdlib only</strong> (<code>math</code>, <code>dataclasses</code>, <code>enum</code>, <code>random</code>, <code>typing</code>)</td>
+<td>pyproject <code>dependencies = []</code></td>
+</tr>
+<tr>
+<td>Safety</td>
+<td>No PII, no network, offline — safe for children</td>
+<td>AC-PU1</td>
+</tr>
+<tr>
+<td>Educational accuracy</td>
+<td>All directional relationships and the priority order are physically correct</td>
+<td>AC-W<em>/P</em>/WH<em>/A</em>/F<em>/AL</em>/ED1</td>
+</tr>
+</tbody>
+</table>
+<h2 id="8-assumptions-decisions">8. Assumptions &amp; decisions</h2>
+<p>Decisions the Planner made where the spec was silent or open. Items marked <strong>[confirmed
+2026-06-02]</strong> were resolved by the user at the approval gate; the rest are documented defaults the
+user did not object to and may revisit.</p>
+<ul>
+<li><strong>A1 — Over-weight handling:</strong> <code>M &gt; 5.0 oz</code> is <strong>reported</strong> (<code>legal_weight = False</code>) and still
+  simulated, <em>not</em> an error or auto-DNF. (Teaches "heavier is faster, but the rules cap you.")</li>
+<li><strong>A2 — DNF semantics [confirmed 2026-06-02]:</strong> an unstable car (<code>d_COM &lt; 0.625 in</code>) is a <strong>DNF
+  with <code>race_time_s = None</code></strong> ("crash"), returning the partial trajectory and the energy ledger up
+  to the failure — <em>not</em> a finite heavy-penalty time. The spec allowed either; the user chose the
+  legible-cliff model.</li>
+<li><strong>A3 — Time step:</strong> default <code>dt = 1e-3 s</code> (spec showed <code>0.01</code>) with <strong>linear finish-line
+  interpolation</strong> so <code>race_time_s</code> isn't quantized to <code>dt</code>. Tunable per call.</li>
+<li><strong>A4 — Geometry constants [confirmed 2026-06-02]:</strong> the spec gives <code>M_max</code>, <code>m_w</code>, <code>g</code>, <code>ρ</code>,
+  <code>C_d</code>, <code>μ</code>, angles and lengths, but <strong>not</strong> wheel <code>R_outer</code>/<code>R_inner</code>, axle <code>r_axle</code>, or
+  <strong>wheelbase L</strong>. The user accepted the Planner's <strong>BSA-typical documented defaults</strong>: <code>R_outer ≈
+  0.595 in</code>, a bore-based <code>R_inner</code> (flagged placeholder, tunable), <code>r_axle ≈ 0.045 in</code> nail shank,
+  wheelbase <code>L ≈ 4.375 in</code>. Each lands in <code>constants.py</code> with a sourced comment.</li>
+<li><strong>A5 — Frontal area <code>A</code> [confirmed 2026-06-02]:</strong> the spec gives <code>C_d</code> but <code>A = height × width</code>
+  needs default body dimensions; the user accepted a documented default frontal area (≈ <code>1.75 in ×
+  2.5 in</code>) with body-shape presets.</li>
+<li><strong>A6 — Priority-order invariant (AC-ED1):</strong> the engine asserts weight+placement is the dominant
+  lever and aerodynamics the smallest. Matches spec §5 takeaways (friction/axle is "biggest lever
+  after weight"); the middle levers' exact ordering among themselves is <em>not</em> asserted, only the top
+  and bottom.</li>
+<li><strong>A7 — Trajectory output [confirmed 2026-06-02]:</strong> <code>RaceResult</code> includes a <strong>down-sampled
+  trajectory</strong> (≤ ~500 points of <code>t, position, velocity, angle</code>) now, so the deferred pygame UI can
+  animate the run without re-simulating.</li>
+</ul>
+<blockquote>
+<p><strong>Note on educational realism vs. correctness.</strong> Because A4/A5 absolute magnitudes are not pinned
+by the spec, every behavioral acceptance criterion is written <strong>directionally</strong> (orderings,
+bounds, ledger closure) and holds under any reasonable constants. The confirmed defaults set the
+<em>realism</em> of absolute numbers; they cannot make a directional AC pass or fail.</p>
+</blockquote>
+<h2 id="9-open-questions-for-the-user">9. Open questions for the user</h2>
+<p><strong>All open questions are resolved (2026-06-02).</strong> The approval gate is clear.</p>
+<ol>
+<li><strong>Geometry constants (A4) and frontal-area defaults (A5)</strong> → <em>Resolved:</em> accept the Planner's
+   BSA-typical documented defaults.</li>
+<li><strong>DNF-vs-penalty choice (A2)</strong> → <em>Resolved:</em> DNF with <code>race_time_s = None</code>.</li>
+<li><strong>Feature id</strong> (rename vs. keep <code>0001-weight-placement-engine</code>) → <em>Resolved:</em> renamed to
+   <strong><code>0001-physics-engine</code></strong> to match the broadened scope.</li>
+</ol>
+</div></body>
+</html>

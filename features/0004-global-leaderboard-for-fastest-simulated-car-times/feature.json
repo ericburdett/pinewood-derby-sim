@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "app": "pinewood-derby-sim",
+  "id": "0004-global-leaderboard-for-fastest-simulated-car-times",
+  "title": "Global leaderboard for fastest simulated car times",
+  "status": "proposed",
+  "description": "Spun off during 0003 (web front-end) planning, 2026-06-02. A shared, opt-in leaderboard of the fastest simulated race times so kids can compete (beat the pack record). Architecture: simulator stays 100% client-side (Pyodide); only the leaderboard talks to the network, via a free managed backend (e.g. Supabase/Firebase free tier) or a free-tier serverless function + KV store, with the static site hosted free (GitHub Pages / Cloudflare Pages / Netlify). CENTRAL OPEN QUESTION for its planning: this collides with the profile's hard constraints ('no network, no accounts, no data collection - safe for children') and US COPPA rules for under-13s. Must be designed safely: no real names/emails/accounts; optional anonymous car-nickname only; local 'personal best' by default with global submission as a deliberate opt-in; clearable; minimal-to-no PII. Profile will need an update to reflect a (leaderboard-only) network boundary. AGE CROSS-NOTE (added 2026-06-02 from 0003): 0003 reconciled the audience to 12-17 but skewed to the YOUNGER end (~12), so a large share of users are UNDER 13 - which makes the COPPA/verifiable-parental-consent question for any networked submission MORE acute, not less. Reinforces the no-PII / anonymous-nickname / local-personal-best-by-default stance above; revisit if the audience floor ever moves. Status: placeholder; user will iterate on it in a later session.",
+  "created_at": "2026-06-02T18:21:44.470239+00:00",
+  "updated_at": "2026-06-02T18:21:44.470239+00:00",
+  "planning": {
+    "session_id": null
+  },
+  "prd_ref": null,
+  "trd_ref": null,
+  "backlog_ref": null,
+  "summary_ref": null,
+  "run_record_refs": [],
+  "changeset_refs": [],
+  "open_questions": []
+}

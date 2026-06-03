@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "app": "pinewood-derby-sim",
+  "id": "0002-kid-friendly-explanation-presentation-layer",
+  "title": "[SUPERSEDED -> folded into 0003] Kid-friendly explanation & presentation layer",
+  "status": "archived",
+  "description": "SUPERSEDED 2026-06-02: folded into 0003-web-front-end by user decision during 0003 planning. Do NOT plan separately. Its scope - translating the engine's raw RaceResult into plain-language, visual, age-appropriate output ('where did your speed go?', the 'why', trajectory for animation) - is now owned by 0003, which implements it as a pure Python translation module (pinewood_derby/present.py) feeding the web UI. The age-range open question it carried is resolved in 0003: target audience is 12-17. Retained as a backlog record for history; no PRD/TRD will be authored here. ORIGINAL: Spun off from 0001-physics-engine during planning (2026-06-02) as the UI/translation layer over RaceResult.",
+  "created_at": "2026-06-02T10:03:00.649250+00:00",
+  "updated_at": "2026-06-02T19:21:12.090162+00:00",
+  "planning": {
+    "session_id": null
+  },
+  "prd_ref": null,
+  "trd_ref": null,
+  "backlog_ref": null,
+  "summary_ref": null,
+  "run_record_refs": [],
+  "changeset_refs": [],
+  "open_questions": [],
+  "archived_reason": ""
+}

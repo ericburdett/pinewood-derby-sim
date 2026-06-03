@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRD — Physics simulation engine</title>
+<style>
+:root { --ink:#1c2330; --muted:#5a6478; --line:#dfe3ea; --accent:#2563eb; --bg:#ffffff; --soft:#f6f8fb; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--soft); color:var(--ink);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+.page { max-width: 820px; margin: 32px auto; background:var(--bg); padding: 48px 56px;
+  border:1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+h1 { font-size: 26px; margin: 0 0 18px; padding-bottom: 12px; border-bottom: 2px solid var(--line); }
+h2 { font-size: 19px; margin: 30px 0 10px; color: var(--accent); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+p, li { color: var(--ink); }
+code { background: var(--soft); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size: 90%; }
+pre { background: var(--soft); border:1px solid var(--line); border-radius:8px; padding:14px; overflow-x:auto; }
+pre code { border:0; padding:0; background:none; }
+blockquote { margin: 14px 0; padding: 8px 16px; border-left: 4px solid var(--accent); background: var(--soft); color: var(--muted); }
+table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+th, td { border:1px solid var(--line); padding: 8px 11px; text-align:left; font-size: 14.5px; vertical-align: top; }
+th { background: var(--soft); }
+a { color: var(--accent); }
+hr { border:0; border-top:1px solid var(--line); margin: 26px 0; }
+@media print { body { background:#fff; } .page { border:0; box-shadow:none; margin:0; max-width:none; } }
+</style>
+</head>
+<body><div class="page">
+<h1 id="trd-pinewood-derby-physics-simulation-engine">TRD — Pinewood Derby Physics Simulation Engine</h1>
+<ul>
+<li><strong>App:</strong> pinewood-derby-sim · <strong>Feature:</strong> <code>0001-physics-engine</code></li>
+<li><strong>Status:</strong> approved (open questions resolved and user-approved 2026-06-02)</li>
+<li><strong>Companion:</strong> <a href="./PRD.md"><code>PRD.md</code></a> · <strong>Domain truth:</strong> <a href="../../docs/physics-spec.md"><code>docs/physics-spec.md</code></a></li>
+<li><strong>Last updated:</strong> 2026-06-02</li>
+</ul>
+<p>This TRD describes <em>how</em> to build the engine specified in the PRD. It is consistent with the app
+profile's stack (Python 3.12, uv, pure dependency-free engine, mypy <code>strict</code>, ruff, pytest) and
+grounds every model choice in <code>docs/physics-spec.md</code>.</p>
+<hr />
+<h2 id="1-architecture-module-layout">1. Architecture &amp; module layout</h2>
+<p>Pure simulation engine, no UI/I/O. New modules under the existing <code>pinewood_derby</code> package:</p>
+<pre><code>src/pinewood_derby/
+  __init__.py            # re-export public API (simulate, CarDesign, Track, RaceResult, ...)
+  units.py               # value objects: Mass, Length, Angle; SI NewType aliases
+  constants.py           # BSA + spec constants (M_max, g, RHO, m_w, defaults, presets)
+  car.py                 # CarDesign + sub-objects (Wheels, BodyShape, Axle, Alignment) + validation
+  track.py               # Track (validated), angle_at(position), STANDARD_TRACK
+  result.py              # RaceResult, Outcome, EnergyLedger, NormalForces (frozen)
+  engine.py              # simulate(...): the Euler integration loop + force model
+tests/                   # QA-owned behavior tests (one+ per acceptance criterion)
+</code></pre>
+<ul>
+<li><strong>Strict separation:</strong> physics lives in <code>engine.py</code>; domain types are dumb, validated, immutable
+  data. No global mutable state.</li>
+<li><strong>Determinism:</strong> all randomness flows through a <code>random.Random(seed)</code> instance created inside
+  <code>simulate(...)</code>; never the module-global <code>random</code>.</li>
+</ul>
+<h2 id="2-units-strategy-mypy-strict-no-unit-confusion">2. Units strategy (mypy strict, no unit confusion)</h2>
+<p>Per the profile ("don't pass bare floats where grams vs ounces could be confused"):</p>
+<ul>
+<li><strong>Boundary value objects</strong> (frozen dataclasses) carry units and convert explicitly:</li>
+<li><code>Mass</code> — <code>.kg</code>, <code>.ounces</code>; <code>Mass.from_ounces(5.0)</code>, <code>Mass.from_grams(141.748)</code>.</li>
+<li><code>Length</code> — <code>.m</code>, <code>.inches</code>, <code>.feet</code>; <code>Length.from_inches(0.85)</code>, <code>Length.from_feet(10)</code>.</li>
+<li><code>Angle</code> — <code>.radians</code>, <code>.degrees</code>; <code>Angle.from_degrees(30)</code>.</li>
+<li>Round-trip conversions are exact within float tolerance (unit test).</li>
+<li><strong>Hot-loop internals</strong> use plain SI <code>float</code>s with <code>NewType</code> aliases for readability:
+  <code>Meters</code>, <code>MetersPerSecond</code>, <code>Newtons</code>, <code>Joules</code>, <code>Kilograms</code>, <code>Radians</code>. Conversion to SI
+  happens once at the API boundary, keeping the integration loop allocation-free (perf NFR).</li>
+<li>Conversion factors centralized in <code>units.py</code> (<code>OZ_TO_KG = 0.0283495</code>, <code>IN_TO_M = 0.0254</code>, …).</li>
+</ul>
+<h2 id="3-data-model-contracts">3. Data model / contracts</h2>
+<pre><code class="language-python">class Outcome(enum.Enum):
+    FINISHED = &quot;finished&quot;
+    DNF = &quot;dnf&quot;                 # unstable: front lifts / wobble crash (spec §4.2)
+
+class Alignment(enum.Enum):
+    STRAIGHT = &quot;straight&quot;       # seeded ping-pong, F_rail ~ U(1.5, 3.0) N
+    RAIL_RIDER = &quot;rail_rider&quot;   # constant F_rail = 0.05 N
+
+@dataclass(frozen=True)
+class Wheels:
+    count_touching: int         # 3 or 4
+    wheel_mass: Mass            # m_w per wheel
+    outer_radius: Length        # R_outer
+    inner_radius: Length        # R_inner (bore-side wall)
+    axle_radius: Length         # r_axle (nail shank)
+    def moment_of_inertia(self) -&gt; float:    # I = ½ m_w (R_o² + R_i²)  [kg·m²]
+
+@dataclass(frozen=True)
+class BodyShape:
+    drag_coefficient: float     # C_d
+    frontal_area: float         # A [m²]  (height × width)
+    # presets: BodyShape.WEDGE (0.20), BodyShape.BLOCK (0.85)
+
+@dataclass(frozen=True)
+class Axle:
+    friction_coefficient: float # μ_axle  (presets: POLISHED_GRAPHITE 0.10, UNPREPARED 0.35)
+
+@dataclass(frozen=True)
+class CarDesign:
+    mass: Mass                              # M (chassis + wheels)
+    com_ahead_of_rear_axle: Length          # d_COM
+    wheelbase: Length                       # L
+    wheels: Wheels
+    body: BodyShape
+    axle: Axle
+    alignment: Alignment
+    # __post_init__ runs validation (Section 6); frozen → validated-once, immutable
+
+@dataclass(frozen=True)
+class Track:
+    ramp_length: Length
+    ramp_angle: Angle
+    transition_radius: Length   # circular-arc radius joining ramp→flat (0 = sharp)
+    flat_length: Length
+    def angle_at(self, position_m: float) -&gt; float:   # radians; piecewise + arc blend
+    # STANDARD_TRACK: 10 ft ramp @ 30°, transition arc, ~32 ft flat (spec §1.2)
+
+@dataclass(frozen=True)
+class NormalForces:
+    front: float                # N_f  [N]
+    rear: float                 # N_r  [N]
+
+@dataclass(frozen=True)
+class EnergyLedger:
+    pe_initial: float           # M·g·Δh_com  [J]
+    ke_linear_final: float      # ½ M v²
+    ke_rotational_final: float  # Σ ½ I ω²
+    w_gravity: float            # Σ F_grav·dx (discrete)
+    w_drag: float               # Σ F_drag·dx
+    w_axle: float               # Σ F_axle·dx
+    w_rail: float               # Σ F_rail·dx
+
+@dataclass(frozen=True)
+class TrajectoryPoint:
+    t: float; position: float; velocity: float; angle: float
+
+@dataclass(frozen=True)
+class RaceResult:
+    outcome: Outcome
+    race_time_s: float | None           # None iff not FINISHED
+    exit_velocity: float                # v at end of ramp [m/s]
+    top_speed: float
+    finish_velocity: float
+    energy: EnergyLedger
+    normal_forces: NormalForces
+    legal_weight: bool                  # M ≤ M_max
+    trajectory: tuple[TrajectoryPoint, ...]   # down-sampled (≤ ~500 pts)
+</code></pre>
+<p><strong>Public entry point:</strong></p>
+<pre><code class="language-python">def simulate(
+    car: CarDesign,
+    track: Track = STANDARD_TRACK,
+    *,
+    dt: float = 1e-3,
+    seed: int = 0,
+) -&gt; RaceResult: ...
+</code></pre>
+<h2 id="4-physics-integration-approach">4. Physics / integration approach</h2>
+<p>Time-step Euler integration of the COM along the track (spec §6), starting at rest.</p>
+<p><strong>Per step</strong> at COM arc-position <code>s</code>, velocity <code>v</code>:
+1. <code>θ = track.angle_at(s)</code>  (ramp angle → arc blend → 0 on flat; continuous, AC-T2)
+2. Forces (all in N):
+   - <code>F_gravity = M·g·sin θ</code>
+   - <code>F_normal  = M·g·cos θ</code>  (used for axle friction load)
+   - <code>F_drag    = ½·ρ·v²·C_d·A</code>                              (spec §3.1)
+   - <code>F_axle    = N·μ·(r_axle / R_outer)·(F_normal / N…)</code> → use per-wheel normal load; total
+     <code>F_axle = μ·(r_axle/R_outer)·F_normal</code> summed over the <code>N</code> touching wheels (load shared by
+     count). (spec §3.2)
+   - <code>F_rail</code>: RAIL_RIDER → <code>0.05</code>; STRAIGHT → <code>rng.uniform(1.5, 3.0)</code> per step, times a <strong>wobble
+     multiplier</strong> that grows as <code>N_f → 0</code> for unstable <code>d_COM</code> (spec §3.3/§4.2).
+3. <strong>Effective inertia</strong> (rotational coupling): the wheels' rotation resists acceleration. Using
+   <code>ω = v/R_outer</code>, the linear+rotational system accelerates as
+   <code>a = F_net / (M + N·I/R_outer²)</code>  — i.e. <code>rotational_inertia_modifier = N·I/R_outer²</code> in the
+   spec's pseudocode. This is the mechanism by which lighter wheels / fewer wheels → faster
+   (AC-WH1, AC-WH2, AC-E2).
+4. <code>F_net = F_gravity − F_drag − F_axle − F_rail</code>
+5. Euler update: <code>v += a·dt</code>; <code>s += v·dt</code>; <code>t += dt</code>. Clamp <code>v ≥ 0</code> (a stalled car does not roll
+   backward up the flat).
+6. Accumulate the energy ledger: <code>w_gravity += F_gravity·dx</code>, etc. (so AC-E1 closes <strong>by
+   construction</strong> regardless of Euler truncation error).</p>
+<p><strong>Placement (d_COM) wiring — the two real mechanisms (spec §4, profile):</strong>
+- <strong>Start height:</strong> the COM's initial arc-position on the ramp depends on <code>d_COM</code>; mass biased
+  rearward (smaller <code>d_COM</code>) starts <strong>higher</strong> → larger <code>pe_initial</code> → faster (AC-P1). Model the
+  release as the front bumper at the start line; the COM sits <code>(L − d_COM)</code>-related distance up-ramp.
+- <strong>Normal-force distribution / stability:</strong> on the flat, <code>N_f = M·g·(d_COM/L)</code>,
+  <code>N_r = M·g·(1 − d_COM/L)</code> (AC-P4). As <code>d_COM → 0</code>, <code>N_f → 0</code> → front lifts. Below the spec's
+  <code>0.625 in</code> threshold the wobble multiplier diverges and the run ends in <code>DNF</code> (AC-P3).</p>
+<p><strong>Finish-line interpolation (A3, AC-E3/AC-O2):</strong> when <code>s</code> crosses <code>track_length</code> between steps,
+linearly interpolate <code>t</code> at the crossing so <code>race_time_s</code> is not quantized to <code>dt</code>.</p>
+<p><strong>DNF detection:</strong> if <code>N_f ≤ 0</code> (front lifts) at any point, or the wobble-amplified <code>F_rail</code> stalls
+the car (<code>v → 0</code> before the finish on the flat), return <code>outcome = DNF</code>, <code>race_time_s = None</code>,
+with the partial trajectory and the energy ledger up to the failure.</p>
+<p><strong>Trajectory down-sampling:</strong> record every step internally but emit ≤ ~500 evenly-spaced
+<code>TrajectoryPoint</code>s (keeps <code>RaceResult</code> bounded for the future UI; A7).</p>
+<h2 id="5-constants-constantspy">5. Constants (<code>constants.py</code>)</h2>
+<p>From the spec (§1.1) plus geometry defaults from PRD A4/A5 — <strong>confirmed by the user 2026-06-02</strong>
+(BSA-typical, each with a sourced comment; <code>R_inner</code> stays a flagged, tunable placeholder):</p>
+<pre><code class="language-python">G = 9.81                      # m/s²
+RHO_AIR = 1.225               # kg/m³
+MAX_MASS = Mass.from_ounces(5.0)          # 0.141748 kg
+STD_WHEEL_MASS = Mass.from_ounces(0.09)   # 0.00255 kg
+# --- geometry NOT in the spec; defaults pending confirmation (PRD A4/A5) ---
+STD_WHEELBASE   = Length.from_inches(4.375)
+STD_R_OUTER     = Length.from_inches(0.595)
+STD_R_INNER     = Length.from_inches(0.37)    # placeholder bore-wall radius
+STD_AXLE_RADIUS = Length.from_inches(0.045)
+STD_FRONTAL_AREA = 0.0028     # m² placeholder (≈ 1.75&quot; × 2.5&quot;)
+# placement zones (spec §4.2)
+COM_OPTIMAL = (Length.from_inches(0.75), Length.from_inches(1.0))
+COM_UNSTABLE_BELOW = Length.from_inches(0.625)
+# presets
+CD_WEDGE, CD_BLOCK = 0.20, 0.85
+MU_POLISHED_GRAPHITE, MU_UNPREPARED = 0.10, 0.35
+RAIL_F_RAIL_RIDER = 0.05      # N
+RAIL_PINGPONG_RANGE = (1.5, 3.0)  # N
+</code></pre>
+<h2 id="6-validation-error-handling">6. Validation &amp; error handling</h2>
+<p><code>__post_init__</code> on each frozen dataclass validates and raises <code>ValueError</code> with a clear message:</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Rule</th>
+<th>AC</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mass</code></td>
+<td><code>&gt; 0</code></td>
+<td>AC-W3</td>
+</tr>
+<tr>
+<td><code>com_ahead_of_rear_axle</code></td>
+<td><code>0 &lt; d_COM &lt; wheelbase</code></td>
+<td>AC-P5</td>
+</tr>
+<tr>
+<td><code>wheelbase</code></td>
+<td><code>&gt; 0</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>wheels.count_touching</code></td>
+<td><code>∈ {3, 4}</code></td>
+<td>AC-WH3</td>
+</tr>
+<tr>
+<td><code>wheels</code> radii/mass</td>
+<td>all <code>&gt; 0</code>; <code>inner &lt; outer</code>; <code>axle &lt; outer</code></td>
+<td>AC-WH3</td>
+</tr>
+<tr>
+<td><code>body.drag_coefficient</code>, <code>frontal_area</code></td>
+<td><code>&gt; 0</code></td>
+<td>AC-A3</td>
+</tr>
+<tr>
+<td><code>axle.friction_coefficient</code></td>
+<td><code>≥ 0</code></td>
+<td>AC-F2</td>
+</tr>
+<tr>
+<td><code>track</code> lengths</td>
+<td><code>&gt; 0</code></td>
+<td>AC-T3</td>
+</tr>
+<tr>
+<td><code>track.ramp_angle</code></td>
+<td><code>0° &lt; θ &lt; 90°</code></td>
+<td>AC-T3</td>
+</tr>
+<tr>
+<td><code>track.transition_radius</code></td>
+<td><code>≥ 0</code></td>
+<td>AC-T3</td>
+</tr>
+<tr>
+<td><code>simulate(dt=...)</code></td>
+<td><code>dt &gt; 0</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Over-weight (<code>mass &gt; MAX_MASS</code>) is <strong>not</strong> an error — it sets <code>legal_weight = False</code> (AC-W2, A1).</p>
+<h2 id="7-dependencies">7. Dependencies</h2>
+<ul>
+<li><strong>Runtime:</strong> Python <strong>stdlib only</strong> — <code>math</code>, <code>dataclasses</code>, <code>enum</code>, <code>random</code>, <code>typing</code>.
+  <code>pyproject.toml</code> <code>dependencies = []</code> stays empty (profile: engine dependency-free).</li>
+<li><strong>Dev:</strong> existing <code>pytest</code>, <code>pytest-cov</code>, <code>ruff</code>, <code>mypy</code> (already in <code>[dependency-groups].dev</code>).</li>
+</ul>
+<h2 id="8-performance">8. Performance</h2>
+<ul>
+<li>Standard track ≈ 12.8 m; race ≈ 3–4 s; at <code>dt = 1e-3</code> → ~3–4k iterations of scalar float math →
+  well under the <strong>5 ms</strong> budget. SI floats in the loop (no per-step object allocation) keep it
+  fast. A timed test asserts <code>&lt; 5 ms</code> with margin.</li>
+<li>If <code>dt = 1e-3</code> ever threatens the budget on CI, it is tunable per call; AC-E3 (convergence)
+  guards that coarsening <code>dt</code> stays accurate.</li>
+</ul>
+<h2 id="9-risks-mitigations">9. Risks &amp; mitigations</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Euler doesn't conserve energy exactly</strong> → naive energy test flakes</td>
+<td>Frame AC-E1 as a <em>ledger</em> that closes by construction (discrete work-energy theorem); AC-E4 checks gravity-work vs analytic PE with a dt-shrinking tolerance; AC-E3 checks convergence.</td>
+</tr>
+<tr>
+<td><strong>Missing geometry constants</strong> (A4/A5) → educationally wrong magnitudes</td>
+<td>Surfaced as assumptions; behavioral ACs assert <em>direction/ordering</em>, not magic numbers, so they hold under any reasonable constants — but final constants need user sign-off.</td>
+</tr>
+<tr>
+<td><strong>Seeded RNG nondeterminism</strong></td>
+<td>All randomness via a local <code>random.Random(seed)</code>; AC-AL3 pins bit-identical reproducibility; RAIL_RIDER path is RNG-free.</td>
+</tr>
+<tr>
+<td><strong>Priority-order invariant (AC-ED1) too brittle</strong></td>
+<td>Assert only that weight+placement is the <em>largest</em> lever and aero the <em>smallest</em>; do not over-constrain the middle levers' relative order.</td>
+</tr>
+<tr>
+<td><strong>d_COM start-height model under-specified</strong></td>
+<td>TRD gives the recommended parameterization; QA's monotonicity tests + adversarial domain-correctness pass enforce the real tradeoff curve.</td>
+</tr>
+<tr>
+<td><strong>Float clamp <code>v ≥ 0</code> masking a stall</strong></td>
+<td>Stall detection (v→0 on flat before finish) routes to DNF rather than an infinite loop; integration loop has a max-time guard.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="10-test-strategy">10. Test strategy</h2>
+<ul>
+<li><strong>Behavior-driven</strong>, one+ test per acceptance criterion (AC-id referenced in test names);
+  assertions on <em>relationships and bounds</em> (monotonic ordering, DNF vs finish, ledger closure,
+  validation raises), not on implementation-coupled magic constants — matching the profile.</li>
+<li><strong>Determinism:</strong> repeat-call equality (AC-AL3); seeded RNG.</li>
+<li><strong>Convergence:</strong> dt-halving stability (AC-E3); dt-shrinking PE tolerance (AC-E4).</li>
+<li><strong>Boundaries/validation:</strong> every <code>ValueError</code> path (the adversarial-review checklist: min/zero/
+  out-of-range/wrong-type). </li>
+<li><strong>Domain correctness:</strong> the priority-order test (AC-ED1) and every directional "better build =
+  faster" relationship — the educational-accuracy guardrail.</li>
+<li><strong>NFRs:</strong> coverage ≥ 90% engine via <code>pytest --cov</code>; timed perf test &lt; 5 ms; <code>ruff</code> + <code>mypy
+  strict</code> in the gate.</li>
+</ul>
+<h2 id="11-traceability-ac-module">11. Traceability (AC → module)</h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>ACs</th>
+<th>Primary module(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Units / boundary types</td>
+<td>AC-W2, AC-O1</td>
+<td><code>units.py</code></td>
+</tr>
+<tr>
+<td>Car validation</td>
+<td>AC-W3, AC-P5, AC-WH3, AC-A3, AC-F2</td>
+<td><code>car.py</code></td>
+</tr>
+<tr>
+<td>Track geometry</td>
+<td>AC-T1, AC-T2, AC-T3</td>
+<td><code>track.py</code></td>
+</tr>
+<tr>
+<td>Force model &amp; integration</td>
+<td>AC-W1, AC-P1/2/3, AC-WH1/2, AC-A1/2, AC-F1, AC-AL1/2</td>
+<td><code>engine.py</code></td>
+</tr>
+<tr>
+<td>Determinism / purity</td>
+<td>AC-AL3, AC-PU1</td>
+<td><code>engine.py</code></td>
+</tr>
+<tr>
+<td>Energy ledger &amp; invariants</td>
+<td>AC-E1/2/3/4</td>
+<td><code>engine.py</code>, <code>result.py</code></td>
+</tr>
+<tr>
+<td>Output contract</td>
+<td>AC-O1, AC-O2, AC-P4</td>
+<td><code>result.py</code>, <code>engine.py</code></td>
+</tr>
+<tr>
+<td>Educational priority order</td>
+<td>AC-ED1</td>
+<td><code>engine.py</code> (composite test)</td>
+</tr>
+</tbody>
+</table>
+</div></body>
+</html>

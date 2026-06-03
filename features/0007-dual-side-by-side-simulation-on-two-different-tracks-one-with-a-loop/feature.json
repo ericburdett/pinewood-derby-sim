@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "app": "pinewood-derby-sim",
+  "id": "0007-dual-side-by-side-simulation-on-two-different-tracks-one-with-a-loop",
+  "title": "Dual side-by-side simulation on two different tracks (one with a 'loop')",
+  "status": "proposed",
+  "description": "Run two races at once on two DIFFERENT tracks, each with its own animation + metrics (time, 'where did your speed go?', why) and ideally a head-to-head comparison. Spun off from 0003-web-front-end (done) which provides the Pyodide bridge, present.py, animator and result panel to build on. User specifically asked for a second track 'with a loop in it'. FEASIBILITY FLAG for planning: the 0001 engine is a pure gravity-descent model (Track = ramp angle 0-90 -> transition -> flat, angle monotonically decreasing to 0) and CANNOT represent a vertical loop (no climbing/inversion/centripetal/fall-off physics); a faked loop over flat-track physics would teach wrong physics, violating the app's hard educational-accuracy rule. The engine IS parameterized for different REAL tracks and simulate()/present() already accept an arbitrary track, so a faithful dual race on two engine-valid geometries is buildable now without engine changes. OPEN QUESTIONS for the planning session (do not resolve yet): (1) true vertical loop [needs a big 0001 engine extension] vs a curvy/twisty/hilly but still-downhill track [extensible faithfully]; (2) stay within real-derby-physics vs allow a playful/arcade second track; (3) same car on both tracks [track-vs-track comparison] vs independent cars; (4) per-side metrics only vs a head-to-head comparison (winner, time delta). A real-loop variant would depend on a 0001-physics-engine extension.",
+  "created_at": "2026-06-03T15:44:43.858995+00:00",
+  "updated_at": "2026-06-03T15:44:43.858995+00:00",
+  "planning": {
+    "session_id": null
+  },
+  "prd_ref": null,
+  "trd_ref": null,
+  "backlog_ref": null,
+  "summary_ref": null,
+  "run_record_refs": [],
+  "changeset_refs": [],
+  "open_questions": []
+}

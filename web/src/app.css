@@ -1,0 +1,492 @@
+/* Race Tech — sleek dark, glassmorphism, neon cyan/lime accents. 100% same-origin: system
+   fonts, CSS gradients/SVG only, no CDN/webfonts (preserves AC-P1/AC-P3). WCAG-AA contrast,
+   never color-only (text/icons carry meaning — AC-A2), responsive to ~1024px (AC-A3). */
+:root {
+  --bg-0: #070b14;
+  --bg-1: #0f1724;
+  --panel: rgba(22, 32, 50, 0.72);
+  --panel-edge: rgba(120, 170, 230, 0.18);
+  --ink: #e8f1fc; /* on panels: contrast > 12:1 */
+  --muted: #9fb3cc;
+  --cyan: #38bdf8;
+  --lime: #a3e635;
+  --warn: #ffd166;
+  --danger: #ff7a7a;
+  --ok: #5fe3a1;
+  --focus: #ffd166;
+  --radius: 16px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font: 16px/1.55 var(--font);
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(56, 189, 248, 0.12), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(163, 230, 53, 0.08), transparent 55%),
+    linear-gradient(180deg, var(--bg-1), var(--bg-0));
+  background-attachment: fixed;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px clamp(16px, 4vw, 40px);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(7, 11, 20, 0.82), rgba(7, 11, 20, 0.35));
+  border-bottom: 1px solid var(--panel-edge);
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.brand .bolt {
+  font-size: 1.3rem;
+  filter: drop-shadow(0 0 6px var(--cyan));
+}
+.brand h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  background: linear-gradient(90deg, var(--cyan), var(--lime));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+/* Two columns: a sticky "stage" (the car preview + the race) stays in view while the
+   controls / telemetry / inspection / garage column scrolls past it. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: 18px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 22px clamp(16px, 4vw, 40px) 48px;
+  align-items: start;
+}
+.stage {
+  position: sticky;
+  top: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: calc(100vh - 104px);
+  overflow: auto;
+  min-width: 0;
+}
+.scrollcol {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .stage {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* ── Glass panels ───────────────────────────────────────────────────────────── */
+.panel {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0.5;
+}
+.panel h2 {
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.panel h3 {
+  font-size: 0.95rem;
+  margin: 16px 0 8px;
+  color: var(--ink);
+}
+
+canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 12px;
+  background: radial-gradient(120% 120% at 50% 0%, #0d1726, #070d18);
+  border: 1px solid var(--panel-edge);
+}
+.clock,
+.preview-summary {
+  margin: 10px 2px 0;
+  color: var(--muted);
+}
+.clock output {
+  color: var(--cyan);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.preview-summary {
+  font-size: 0.9rem;
+  min-height: 1.4em;
+}
+
+/* ── Controls ───────────────────────────────────────────────────────────────── */
+.field {
+  margin-bottom: 16px;
+}
+.field > label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.field .val {
+  color: var(--cyan);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.hint {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin: 6px 0 0;
+}
+
+/* Custom range sliders — glowing thumb on a gradient track. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 26px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cyan), rgba(56, 189, 248, 0.15));
+  border: 1px solid var(--panel-edge);
+}
+input[type="range"]::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cyan), rgba(56, 189, 248, 0.15));
+  border: 1px solid var(--panel-edge);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #eafaff, var(--cyan));
+  border: 2px solid #eafaff;
+  box-shadow: 0 0 10px var(--cyan);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #eafaff, var(--cyan));
+  border: 2px solid #eafaff;
+  box-shadow: 0 0 10px var(--cyan);
+}
+
+/* Segmented (wheel count) + toggle */
+.segmented {
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+}
+.segmented legend {
+  font-weight: 600;
+  padding: 0 6px;
+}
+.segmented label,
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.toggle {
+  display: flex;
+  padding: 10px 0 4px;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: var(--cyan);
+}
+input[type="text"] {
+  flex: 1;
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+  border-radius: 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(7, 13, 24, 0.7);
+  color: var(--ink);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.badge.legal {
+  background: rgba(95, 227, 161, 0.14);
+  color: var(--ok);
+  border: 1px solid rgba(95, 227, 161, 0.4);
+}
+.badge.over {
+  background: rgba(255, 209, 102, 0.14);
+  color: var(--warn);
+  border: 1px solid rgba(255, 209, 102, 0.4);
+}
+.error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────────── */
+button {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  padding: 0.6rem 1.1rem;
+  min-height: 2.7rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
+  transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn.danger {
+  color: var(--danger);
+  border-color: rgba(255, 122, 122, 0.4);
+}
+.race-btn {
+  font-size: 1.05rem;
+  letter-spacing: 0.5px;
+  padding: 0.7rem 1.6rem;
+  color: var(--bg-0);
+  border: none;
+  background: linear-gradient(90deg, var(--cyan), var(--lime));
+  box-shadow: 0 0 22px rgba(56, 189, 248, 0.45);
+}
+.race-btn:hover:not(:disabled) {
+  box-shadow: 0 0 30px rgba(163, 230, 53, 0.6);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ── Result / telemetry ─────────────────────────────────────────────────────── */
+.headline {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.time {
+  color: var(--cyan);
+  font-weight: 700;
+}
+.breakdown,
+.tips,
+.garage-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+.breakdown li {
+  margin: 8px 0;
+}
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bar-label {
+  flex: 0 0 8.5rem;
+  font-size: 0.92rem;
+}
+.bar-track {
+  flex: 1;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(7, 13, 24, 0.8);
+  border: 1px solid var(--panel-edge);
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2b6f9e, var(--cyan));
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+.bar-fill.kept {
+  background: linear-gradient(90deg, #4f9e5f, var(--lime));
+  box-shadow: 0 0 10px rgba(163, 230, 53, 0.5);
+}
+.bar-pct {
+  flex: 0 0 3.2rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.why {
+  border-left: 3px solid var(--cyan);
+  padding-left: 12px;
+  color: var(--ink);
+}
+.tips li {
+  position: relative;
+  margin: 8px 0;
+  padding-left: 1.5rem;
+}
+.tips li::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: var(--lime);
+  font-weight: 800;
+}
+
+/* ── Garage ─────────────────────────────────────────────────────────────────── */
+.garage-save label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.garage-row {
+  display: flex;
+  gap: 10px;
+}
+.garage-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--panel-edge);
+}
+.garage-list .name {
+  flex: 1;
+  font-weight: 600;
+}
+
+/* ── Inspection checklist ───────────────────────────────────────────────────── */
+.inspection {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+}
+.inspection li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--panel-edge);
+}
+.inspection .ins-icon {
+  flex: 0 0 1.4rem;
+  height: 1.4rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+.inspection li.ok .ins-icon {
+  background: rgba(95, 227, 161, 0.16);
+  color: var(--ok);
+  border: 1px solid rgba(95, 227, 161, 0.5);
+}
+.inspection li.bad .ins-icon {
+  background: rgba(255, 122, 122, 0.16);
+  color: var(--danger);
+  border: 1px solid rgba(255, 122, 122, 0.5);
+}
+.inspection .ins-name {
+  flex: 1;
+  font-weight: 600;
+}
+.inspection li.bad .ins-name {
+  color: var(--danger);
+}
+.inspection .ins-detail {
+  color: var(--muted);
+  font-size: 0.86rem;
+  text-align: right;
+}
+.garage-list button {
+  min-height: 2.2rem;
+  padding: 0.35rem 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+  button:hover:not(:disabled) {
+    transform: none;
+  }
+}

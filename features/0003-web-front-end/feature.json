@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0.0",
+  "app": "pinewood-derby-sim",
+  "id": "0003-web-front-end",
+  "title": "Web front-end (interactive car builder & race UI)",
+  "status": "done",
+  "description": "The interactive front-end that lets a kid (12-17) actually drive the simulator: configure a car (weight, placement, wheels, axle, body, alignment), race it, watch the run animate on the track, read a plain-language 'where did your speed go?' breakdown + 'why', and save/load designs in a local garage. Folds in the former 0002 presentation layer (0003 owns both the pure RaceResult->kid-language translation AND the UI). Platform: static web app running the pure Python engine in-browser via Pyodide (WASM), hosted free on GitHub Pages; no network at runtime, all assets same-origin, no PII. Build deferred until the 0001 engine contract (CarDesign/RaceResult) stabilizes. PRD/TRD authored and APPROVED 2026-06-02; all 3 open questions resolved (audience 12-17 skewed young; stack = vanilla TS+Vite+canvas+vendored Pyodide; two non-finish modes distinguished per AC-R4).",
+  "created_at": "2026-06-02T00:00:00Z",
+  "updated_at": "2026-06-03T13:45:00+00:00",
+  "planning": {
+    "session_id": "3fb6a1ed-cfb8-40c7-ab67-33ea52bb80b9"
+  },
+  "prd_ref": "agentic-sdlc/apps/pinewood-derby-sim/features/0003-web-front-end/PRD.html",
+  "trd_ref": "agentic-sdlc/apps/pinewood-derby-sim/features/0003-web-front-end/TRD.html",
+  "backlog_ref": null,
+  "summary_ref": "agentic-sdlc/apps/pinewood-derby-sim/features/0003-web-front-end/ESCALATION.md",
+  "run_record_refs": ["agentic-sdlc/evals/run-records/pinewood-derby-sim/0003-web-front-end.json", "agentic-sdlc/evals/run-records/pinewood-derby-sim/0003-web-front-end-run1-escalated.json"],
+  "metrics_rollup": {
+    "output_tokens": 2152524,
+    "agent_count": 29,
+    "wall_ms": 5967193,
+    "rework_loops": 7,
+    "adversarial_findings": 12,
+    "po_rejections": 0,
+    "acceptance_first_pass": false,
+    "escalations": 1
+  },
+  "changeset_refs": [],
+  "open_questions": [
+    {
+      "id": "q1",
+      "question": "Reconcile the profile's target audience (currently ~7-12) to 12-17, matching this feature and the 0001 PRD/spec? (Side effect: a follow-up profile update that also governs 0005 educational content.)",
+      "resolved": true,
+      "resolution": "RESOLVED 2026-06-02 by user: reconcile to 12-17, but tune reading level and tone to the YOUNGER end (~12) so the youngest target users aren't left behind (still legible for 17). PRD A2/\u00a71/\u00a72 and \u00a79 updated. A follow-up profile update to 12-17 (also governing 0005) is required and is flagged for the synthesizer."
+    },
+    {
+      "id": "q2",
+      "question": "Confirm the front-end stack: vanilla TypeScript + Vite + HTML canvas, with Pyodide vendored same-origin (no CDN) - or specify a preferred framework. TRD-level choice; no effect on user-visible behavior.",
+      "resolved": true,
+      "resolution": "RESOLVED 2026-06-02 by user: no preference, asked for the simplest robust option with good UX. Planner selected the A5 default - vanilla TypeScript + Vite + HTML canvas with Pyodide vendored same-origin (no CDN): no framework runtime, smallest bundle, easiest to keep same-origin/offline. No effect on user-visible behavior."
+    },
+    {
+      "id": "q3",
+      "question": "Presentation must distinguish the engine's TWO non-finish modes so a kid doesn't read a slow car as a crash: outcome=DNF currently covers BOTH (a) unstable wobble/crash (d_COM below the stability cliff) AND (b) a stable-but-underpowered car that simply ran out of speed short of the line (e.g. worst-case-friction builds that stall ~0.3 m short). The RaceResult already carries the trajectory showing WHERE it stopped and the normal forces showing WHY, so the translation layer can tell the two stories apart ('your car tipped/wobbled' vs 'your car ran out of speed and stopped just short'). Carried over from 0001-physics-engine WI12-ADV-006 (adjudicated 2026-06-03 as a presentation concern, not an engine defect).",
+      "resolved": true,
+      "resolution": "RESOLVED 2026-06-02: folded into the PRD/TRD as a requirement, then CORRECTED against the frozen 0001 source. PRD AC-R4 (new) mandates telling the two non-finish stories apart; AC-R2 reworded from 'DNF/crash' to a neutral non-finish state. Verified against engine.py/result.py: the engine emits DNF for BOTH an instability short-circuit (car never leaves the line: single trajectory point at position 0, all-zero ledger) AND an in-loop stall (multi-point trajectory ending at 0<position<track_length). The discriminator is the TRAJECTORY + LEDGER, NOT normal_forces (which is a single static front/rear pair, not a per-frame series, and cannot detect a tip). TRD present.py gains outcome in {finished, tipped, stalled} + stopped_distance_frac, a classifier on those signals (no new physics, AC-G1), distinct animator rendering (tipped = wobble-at-line with no run to animate; stalled = coast to halt), and a pytest driven by real simulate() output. A slow-but-stable car is never shown as a crash."
+    }
+  ],
+  "build": {
+    "session_id": "55f4d0f9-3f78-404c-9d9b-b1c51c035e71",
+    "log": "/Users/ericburdett/Projects/agentic-sdlc/apps/pinewood-derby-sim/features/0003-web-front-end/build.log",
+    "started_at": "2026-06-03T03:44:20.694016+00:00",
+    "pid": 28846
+  }
+}

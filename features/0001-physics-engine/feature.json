@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0.0",
+  "app": "pinewood-derby-sim",
+  "id": "0001-physics-engine",
+  "title": "Physics simulation engine (weight, placement, wheels, aero, friction, alignment)",
+  "status": "done",
+  "description": "Pure, deterministic, dependency-free physics engine: given a full car design (weight, center-of-mass, wheels/rotational inertia, body drag, axle friction, alignment) and a validated track, time-step integrate the run and return a RaceResult (time, outcome, speeds, normal forces, and a closing energy ledger). Grounded in docs/physics-spec.md. No UI. First end-to-end exercise of the TDD build loop. (Scope broadened from weight+placement to full physics per PO decisions 2026-06-02; id renamed weight-placement-engine -> physics-engine 2026-06-02 to match scope.)",
+  "created_at": "2026-06-02T00:00:00Z",
+  "updated_at": "2026-06-03T03:13:30+00:00",
+  "planning": {
+    "session_id": "8c2a3e99-0ec2-4003-ad50-2335cc6befe9"
+  },
+  "prd_ref": "agentic-sdlc/apps/pinewood-derby-sim/features/0001-physics-engine/PRD.html",
+  "trd_ref": "agentic-sdlc/apps/pinewood-derby-sim/features/0001-physics-engine/TRD.html",
+  "backlog_ref": null,
+  "summary_ref": "agentic-sdlc/apps/pinewood-derby-sim/features/0001-physics-engine/ESCALATION.md",
+  "run_record_refs": [
+    "agentic-sdlc/evals/run-records/pinewood-derby-sim/0001-physics-engine.json",
+    "agentic-sdlc/evals/run-records/pinewood-derby-sim/0001-physics-engine-run1-escalated.json"
+  ],
+  "changeset_refs": [],
+  "open_questions": [
+    {
+      "id": "q1",
+      "question": "Confirm/replace the geometry constants (A4) and frontal-area defaults (A5).",
+      "resolved": true,
+      "resolution": "User accepted the Planner's BSA-typical documented defaults (R_outer 0.595 in, bore-based R_inner placeholder, r_axle 0.045 in nail shank, wheelbase 4.375 in, frontal area approx 1.75 in x 2.5 in). Each lands in constants.py with a sourced comment; R_inner stays a flagged placeholder, tunable if a magnitude looks off. Behavioral ACs remain direction-based so they hold under any reasonable values."
+    },
+    {
+      "id": "q2",
+      "question": "Confirm the DNF-vs-penalty choice (A2).",
+      "resolved": true,
+      "resolution": "User confirmed: an unstable car (d_COM < 0.625 in, front normal force collapses) is a DNF with race_time_s = None (hard crash), returning the partial trajectory and the energy ledger up to the failure. Models the rear-bias tradeoff as a legible cliff rather than a finite penalty."
+    },
+    {
+      "id": "q3",
+      "question": "Rename the feature id to reflect broadened scope, or keep 0001-weight-placement-engine?",
+      "resolved": true,
+      "resolution": "User chose to rename: directory/id is now 0001-physics-engine to match the broadened full-physics scope. All internal references (feature.json, PRD/TRD, physics-spec appendix) updated; planning session_id unchanged."
+    }
+  ],
+  "build": {
+    "session_id": "8232da30-2be5-4a2b-b6c9-037553d88b1f",
+    "log": "/Users/ericburdett/Projects/agentic-sdlc/apps/pinewood-derby-sim/features/0001-physics-engine/build.log",
+    "started_at": "2026-06-02T10:03:30.197792+00:00",
+    "pid": 10071
+  },
+  "metrics_rollup": {
+    "output_tokens": 7946495,
+    "agent_count": 122,
+    "wall_ms": 34822290,
+    "rework_loops": 17,
+    "adversarial_findings": 60,
+    "po_rejections": 0,
+    "acceptance_first_pass": true,
+    "escalations": 4
+  }
+}

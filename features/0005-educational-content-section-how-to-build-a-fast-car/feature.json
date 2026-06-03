@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "app": "pinewood-derby-sim",
+  "id": "0005-educational-content-section-how-to-build-a-fast-car",
+  "title": "Educational content section (how to build a fast car)",
+  "status": "proposed",
+  "description": "Spun off during 0003 (web front-end) planning, 2026-06-02. A learning/reference section of the site alongside the simulator: how to build an awesome pinewood derby car - the physics behind the best design decisions and what you should actually do, in priority order (weight & placement, friction/axle prep & lubrication, alignment/rail-riding, wheels, then aerodynamics). Reinforces the profile's learning goal and 'rich physics, simple presentation' constraint: plain-language, visual, age-appropriate (~7-12), no Joules/Newtons/coefficients. Ideally cross-links to the simulator so a kid can read a principle then try it. Static content - no backend needed. OPEN QUESTIONS for its planning: reconcile target age range (profile ~7-12 vs spec 12-17); how tightly to couple/deep-link with the simulator and the 0002 explanation wording; content source/accuracy review. Status: placeholder; user will iterate on it in a later session.",
+  "created_at": "2026-06-02T18:21:49.477273+00:00",
+  "updated_at": "2026-06-02T18:21:49.477273+00:00",
+  "planning": {
+    "session_id": null
+  },
+  "prd_ref": null,
+  "trd_ref": null,
+  "backlog_ref": null,
+  "summary_ref": null,
+  "run_record_refs": [],
+  "changeset_refs": [],
+  "open_questions": []
+}

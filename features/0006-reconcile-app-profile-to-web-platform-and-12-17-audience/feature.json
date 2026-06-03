@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "app": "pinewood-derby-sim",
+  "id": "0006-reconcile-app-profile-to-web-platform-and-12-17-audience",
+  "title": "Reconcile app profile to web platform and 12-17 audience",
+  "status": "done",
+  "description": "Profile-maintenance item surfaced during 0003 planning (2026-06-02): the profile.md still describes a DESKTOP/pygame app for ages ~7-12, which 0003 (web front-end), 0004 (leaderboard) and 0005 (educational content) now contradict. The profile governs every agent (developer/qa/auditor), so this reconciliation is tracked separately rather than applied piecemeal. Concrete deltas to apply once accepted: (1) archetype desktop-app -> web-app; (2) framework []/pygame -> note the UI is TypeScript+Vite+HTML-canvas with Pyodide vendored same-origin, while the pinewood_derby ENGINE stays pure/dependency-free Python (pyproject dependencies=[] unchanged); (3) commands.build ''-> a static web build (Vite + engine wheel), commands.run 'uv run python -m pinewood_derby' -> a web dev server (engine pytest commands unchanged); (4) quality_bars: add web/UI test tooling (Playwright headless) alongside the Python pytest bar; (5) Overview/audience ~7-12 -> 12-17 skewed to the younger end (~12) [user-decided 2026-06-02, the only already-settled delta]; (6) Deployment target 'local desktop (pygame)' -> static hosting on GitHub Pages, no server, offline-capable; (7) 'Out of scope: no leaderboards' -> leaderboard is now planned (0004), still no accounts/PII and COPPA-safe; (8) product_plane/archetype_plane: expect web-app-plane artifacts. The one human-judgment call is confirming the app's identity is now a WEB app with the desktop/pygame path dropped (vs kept as an alternate). Likely owner: synthesizer or a dedicated profile-update pass. RESOLVED & DONE 2026-06-03: Eric chose option 1 (install web toolchain + land this profile reconciliation, then build the 0003 UI), which confirms the human-judgment call — the app's identity is now a WEB app and the desktop/pygame path is dropped. All 8 deltas applied to profile.md (archetype=web-app; language=[python,typescript], framework=[vite]; dual test-stack commands incl. install_web/test_web/lint_web/typecheck_web + web build/run, run_engine; quality_bars web_testing/perf/security; audience 12-17 skewed young; deployment=GitHub Pages static/offline; leaderboard noted as planned 0004; web-app archetype_plane note).",
+  "created_at": "2026-06-03T03:43:02.530709+00:00",
+  "updated_at": "2026-06-03T12:20:00+00:00",
+  "planning": {
+    "session_id": null
+  },
+  "prd_ref": null,
+  "trd_ref": null,
+  "backlog_ref": null,
+  "summary_ref": null,
+  "run_record_refs": [],
+  "changeset_refs": [],
+  "open_questions": []
+}

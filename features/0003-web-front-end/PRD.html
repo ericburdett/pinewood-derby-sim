@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRD — Web Front-End (Interactive Car Builder & Race UI)</title>
+<style>
+:root { --ink:#1c2330; --muted:#5a6478; --line:#dfe3ea; --accent:#2563eb; --bg:#ffffff; --soft:#f6f8fb; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--soft); color:var(--ink);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+.page { max-width: 820px; margin: 32px auto; background:var(--bg); padding: 48px 56px;
+  border:1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+h1 { font-size: 26px; margin: 0 0 18px; padding-bottom: 12px; border-bottom: 2px solid var(--line); }
+h2 { font-size: 19px; margin: 30px 0 10px; color: var(--accent); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+p, li { color: var(--ink); }
+code { background: var(--soft); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size: 90%; }
+pre { background: var(--soft); border:1px solid var(--line); border-radius:8px; padding:14px; overflow-x:auto; }
+pre code { border:0; padding:0; background:none; }
+blockquote { margin: 14px 0; padding: 8px 16px; border-left: 4px solid var(--accent); background: var(--soft); color: var(--muted); }
+table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+th, td { border:1px solid var(--line); padding: 8px 11px; text-align:left; font-size: 14.5px; vertical-align: top; }
+th { background: var(--soft); }
+a { color: var(--accent); }
+hr { border:0; border-top:1px solid var(--line); margin: 26px 0; }
+@media print { body { background:#fff; } .page { border:0; box-shadow:none; margin:0; max-width:none; } }
+</style>
+</head>
+<body><div class="page">
+<h1 id="prd-web-front-end-interactive-car-builder-race-ui">PRD — Web Front-End (Interactive Car Builder &amp; Race UI)</h1>
+<ul>
+<li><strong>App:</strong> pinewood-derby-sim</li>
+<li><strong>Feature:</strong> <code>0003-web-front-end</code></li>
+<li><strong>Status:</strong> approved — 2026-06-02 (open questions in §9 resolved)</li>
+<li><strong>Author:</strong> Planner</li>
+<li><strong>Last updated:</strong> 2026-06-02</li>
+<li><strong>Planning session:</strong> <code>3fb6a1ed-cfb8-40c7-ab67-33ea52bb80b9</code></li>
+<li><strong>Grounding docs:</strong> <a href="../../profile.md"><code>profile.md</code></a> · <a href="../../docs/physics-spec.md"><code>docs/physics-spec.md</code></a> ·
+  engine contract <a href="../0001-physics-engine/PRD.md"><code>0001-physics-engine/PRD.md</code></a> ·
+  <a href="../0001-physics-engine/TRD.md"><code>0001-physics-engine/TRD.md</code></a></li>
+</ul>
+<blockquote>
+<p><strong>Scope note.</strong> This feature is the <strong>interactive front-end</strong> that lets a kid actually <em>drive</em> the
+simulator. Per user decisions on 2026-06-02 it <strong>folds in the former <code>0002-kid-friendly
+explanation &amp; presentation layer</code></strong> (now superseded): 0003 owns both the <strong>plain-language
+translation</strong> of the engine's raw <code>RaceResult</code> <em>and</em> the <strong>UI</strong> that renders it. Platform:
+a <strong>static web app</strong> that runs the pure Python engine <strong>in-browser via Pyodide (WASM)</strong>, hosted
+free on <strong>GitHub Pages</strong>. The simulator makes <strong>no network calls at runtime</strong>; the future
+<code>0004</code> leaderboard is the only networked feature and is out of scope here.</p>
+<p><strong>Build is deferred</strong> until the <code>0001</code> engine's public contract (<code>CarDesign</code> / <code>RaceResult</code>)
+stabilizes. This document captures the front-end requirements now so the design intent is locked;
+the build loop runs once the backend settles.</p>
+</blockquote>
+<hr />
+<h2 id="1-problem-statement">1. Problem statement</h2>
+<p>The physics engine (<code>0001</code>) speaks in Joules, Newtons, normal forces, and a down-sampled
+trajectory — correct, but unreadable to a kid. Nothing yet lets a child <strong>configure a car, race it,
+watch what happens, and understand <em>why</em>.</strong> Without a front-end the engine teaches no one.</p>
+<p>The front-end's job is to turn the engine into a <strong>learning toy</strong>: a 12–17-year-old (and a leader
+running a pack demo on a projector) adjusts a car's design, hits <strong>Race</strong>, watches the run animate
+down the track, and gets a <strong>plain-language explanation of where their speed went</strong> that reinforces
+a <em>real, correct</em> building principle. The profile's hard line holds: <strong>rich physics behind the
+boundary, simple presentation in front of it</strong> — nothing technical (Joules, Newtons, coefficients,
+integration) ever reaches the kid. <strong>Reading level and tone are tuned to the younger end of the band
+(~12)</strong> so the youngest target users aren't left behind; this stays legible for 17-year-olds (A2).</p>
+<p>It must run <strong>anywhere a browser does</strong> — a school Chromebook, a tablet, a leader's laptop on a
+projector — with <strong>zero install, no accounts, no data collection, and no network at runtime</strong>.</p>
+<h2 id="2-target-users">2. Target users</h2>
+<ul>
+<li><strong>Primary:</strong> kids <strong>12–17</strong>, <strong>designed to the younger end (~12)</strong> — building a pinewood derby car,
+  learning the design tradeoffs by experimenting. <em>(Audience reconciled to 12–17 per the <code>0001</code>
+  PRD/spec on 2026-06-02, skewed toward 12 per the user; the profile's "~7–12" is superseded — see §8
+  A2 and §9 OQ1.)</em></li>
+<li><strong>Secondary:</strong> den leaders / parents / teachers running a <strong>group demo</strong> on a projector or
+  classroom screen — so the UI must read at a distance and be operable quickly.</li>
+<li><strong>Downstream:</strong> the future <code>0004</code> leaderboard (consumes a finished race's time) and <code>0005</code>
+  educational content (cross-links into the simulator). Both out of scope here.</li>
+</ul>
+<h2 id="3-goals">3. Goals</h2>
+<ul>
+<li>A <strong>single-car interactive builder</strong>: controls for all six engine levers + weight → <strong>Race</strong> →
+  <strong>animated run</strong> on the track → <strong>result + plain-language "why."</strong> (Full-builder scope, confirmed
+  2026-06-02.)</li>
+<li>A <strong>"where did your speed go?"</strong> breakdown that ranks the run's energy losses in kid-language and
+  ties the dominant one to a <strong>real building principle</strong> — preserving the engine's <strong>priority order</strong>
+  (weight &amp; placement and friction dominate; aerodynamics is smallest).</li>
+<li>A <strong>local "garage"</strong>: name, save, reload, and delete car designs in the browser, <strong>offline, no
+  accounts</strong> (confirmed 2026-06-02).</li>
+<li><strong>Install-free, server-free, offline-capable, privacy-safe:</strong> static site, engine in-browser via
+  Pyodide, <strong>all assets same-origin (no third-party CDN), no analytics, no network at runtime, no
+  PII</strong> — safe for children.</li>
+<li><strong>Accessible &amp; demo-ready:</strong> keyboard-operable, WCAG-AA contrast, legible on a projector and a
+  Chromebook.</li>
+<li><strong>Faithful &amp; deterministic:</strong> the UI adds <strong>no physics</strong>; it consumes the engine's public API
+  unchanged, and a given design always produces the <strong>same</strong> time and animation (fixed seed) — which
+  also keeps a future leaderboard fair.</li>
+</ul>
+<h2 id="4-non-goals-out-of-scope">4. Non-goals / out of scope</h2>
+<ul>
+<li><strong>No new physics.</strong> All simulation stays in the <code>0001</code> engine; 0003 only configures inputs,
+  translates outputs, and renders. (AC-G1.)</li>
+<li><strong>No leaderboard / network / accounts / telemetry</strong> — that is <code>0004</code> (opt-in, networked, with its
+  own COPPA-safe design). 0003 is fully local.</li>
+<li><strong>No educational/reference content pages</strong> — that is <code>0005</code>. 0003 may leave a hook to link out,
+  but authors no lessons.</li>
+<li><strong>No head-to-head / multi-car race view</strong> in one screen (single-car builder; comparison is a
+  possible later feature).</li>
+<li><strong>No alternate tracks in v1</strong> — every race runs on the engine's <code>STANDARD_TRACK</code>. The engine already
+  accepts a <code>track</code> argument, so choosing/editing track geometry is a clean later feature, but v1 fixes
+  one track so a saved time is comparable (and a future leaderboard is fair).</li>
+<li><strong>No cloud sync of the garage</strong> — local browser storage only; no cross-device.</li>
+<li><strong>No CAD / cut-file / 3D model</strong> — principles, not part design (profile constraint).</li>
+<li><strong>No native desktop / pygame build</strong> — superseded by the web platform decision (2026-06-02).</li>
+<li><strong>No account-based personalization, no ads, no third-party embeds.</strong></li>
+</ul>
+<h2 id="5-functional-requirements">5. Functional requirements</h2>
+<p>The app is a single page with four regions; all four are in v1.</p>
+<table>
+<thead>
+<tr>
+<th>Region</th>
+<th>What it does</th>
+<th>Engine touchpoint</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Builder controls</strong></td>
+<td>Adjust <strong>weight (M)</strong>, <strong>weight placement (d_COM)</strong>, <strong>wheels</strong> (3/4 touching, light/standard), <strong>axle prep</strong> (polished+graphite ↔ unprepared), <strong>body shape</strong> (wedge ↔ block), <strong>alignment</strong> (rail-rider ↔ straight). Live legal-weight (≤ 5.0 oz) indicator.</td>
+<td>Builds a validated <code>CarDesign</code></td>
+</tr>
+<tr>
+<td><strong>Track &amp; animation</strong></td>
+<td>A 2-D side view of the standard track (ramp → flat); <strong>Race</strong> animates the car along the returned trajectory; finish line, running clock.</td>
+<td><code>simulate(car)</code> → <code>RaceResult.trajectory</code></td>
+</tr>
+<tr>
+<td><strong>Result &amp; "why"</strong></td>
+<td>Race time (or an encouraging non-finish state that <strong>tells a wobble/crash apart from a stable car that ran out of speed and stopped short</strong>), a <strong>"where did your speed go?"</strong> ranked breakdown, and a one-line <strong>"why"</strong> tied to a real principle.</td>
+<td>Translates <code>RaceResult.energy</code>, <code>outcome</code>, <code>trajectory</code> (final position), times</td>
+</tr>
+<tr>
+<td><strong>Garage</strong></td>
+<td>Name/save the current design, list saved designs, load (restores all controls), delete.</td>
+<td>Serialize/deserialize <code>CarDesign</code> ↔ localStorage</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Primary flow:</strong> open (a sensible default car loads) → adjust controls → <strong>Race</strong> → watch the
+animation → read the time + "where did your speed go?" + "why" → tweak and race again → optionally
+<strong>save</strong> the design to the garage.</p>
+<p><strong>Translation layer (folded 0002), internal but required:</strong> a <strong>pure</strong> module maps a <code>RaceResult</code>
+(+ the <code>CarDesign</code>) to a kid-facing <strong>view-model</strong>: ranked energy losses with plain labels, the
+dominant-factor message, legal/DNF wording, and the trajectory for animation. It computes no physics
+and emits <strong>no technical units or jargon</strong>. It is unit-tested independently of the DOM.</p>
+<h2 id="6-acceptance-criteria-testable">6. Acceptance criteria (testable)</h2>
+<p>Each criterion is behavioral and machine-checkable. The <strong>translation layer</strong> ACs are unit-testable
+(pure Python, <code>uv run pytest</code>); the <strong>UI</strong> ACs are checkable via headless browser tests. "Kid-facing
+text" = any string rendered to the user.</p>
+<h3 id="configuration-controls-cardesign">Configuration (controls → CarDesign)</h3>
+<ul>
+<li><strong>AC-C1</strong> Every control maps to its <code>CarDesign</code> field within the engine's valid domain; the UI
+  <strong>cannot</strong> submit a design the engine would reject — out-of-range or invalid combinations (e.g.
+  wheels out-massing the car) are prevented or shown as an inline message, <strong>never</strong> an uncaught
+  exception or a stack trace.</li>
+<li><strong>AC-C2</strong> On first open, a <strong>legal, finishing</strong> default car is loaded and immediately raceable.</li>
+<li><strong>AC-C3</strong> The displayed weight updates live and shows <strong>legal (≤ 5.0 oz) vs over-limit</strong> status;
+  an over-limit car is still raceable (the rule is shown, not enforced by physics) — consistent with
+  engine AC-W2.</li>
+</ul>
+<h3 id="race-animation">Race &amp; animation</h3>
+<ul>
+<li><strong>AC-R1</strong> <strong>Race</strong> runs <code>simulate(...)</code> on the current design and <strong>animates</strong> the car along the
+  returned trajectory from start to finish; a finishing car visibly reaches the finish line, and the
+  displayed time equals the engine's <code>race_time_s</code> (to display precision).</li>
+<li><strong>AC-R2</strong> A <strong>non-finishing</strong> design shows a clear, <strong>encouraging</strong> "here's what happened — here's
+  why" state with <strong>no numeric time</strong> — never an error dialog. A <strong>stalled</strong> car animates its real run
+  and <strong>coasts to a visible halt short of the line</strong>; a <strong>tipped</strong> car never leaves the start line
+  (the engine determines instability before the run), so it shows a <strong>wobble-at-the-line</strong> state
+  rather than a mid-track animation.</li>
+<li><strong>AC-R4</strong> <strong>Two non-finish stories are told apart.</strong> The engine reports a single <code>outcome=DNF</code> for
+  <em>both</em> (a) an <strong>unstable</strong> car that tipped/wobbled (front-load fraction below the stability cliff)
+  and (b) a <strong>stable but underpowered</strong> car that <strong>ran out of speed and stopped short</strong> of the finish.
+  The UI must distinguish them from the engine's own evidence: a <strong>tipped</strong> run has a <strong>single at-rest
+  <code>trajectory</code> point at position 0</strong> and an <strong>all-zero energy ledger</strong> (the car never moved); a
+  <strong>stalled</strong> run has a <strong>real multi-point trajectory whose last point sits between the start and the
+  finish line</strong> (<code>0 &lt; position &lt; track_length</code>) with <code>finish_velocity ≈ 0</code>. <em>(Note: <code>normal_forces</code> is
+  a single static front/rear pair, not a per-frame series, so it is </em><em>not</em><em> the discriminator.)</em> Each
+  gets the matching kid-language message (e.g. <em>"Your car wobbled and tipped right off the line"</em> vs
+  <em>"Your car ran out of speed and stopped just short"</em>) and a <em>different</em>, correct "why." A
+  slow-but-stable car is <strong>never</strong> shown as a crash.</li>
+<li><strong>AC-R3</strong> <strong>Determinism:</strong> racing the same design twice yields the <strong>same time and the same
+  animation</strong> (the UI pins the engine seed); identical saved designs reproduce their time on reload.</li>
+</ul>
+<h3 id="explanation-why-folded-0002">Explanation / "why" (folded 0002)</h3>
+<ul>
+<li><strong>AC-X1</strong> After a finished race, the result shows the <strong>time</strong> and a <strong>"where did your speed go?"</strong>
+  breakdown that <strong>ranks</strong> the run's energy outcomes — air/drag, axle friction, rail bumping,
+  energy spent spinning the wheels, and <strong>speed kept</strong> — <strong>largest first</strong>, derived from
+  <code>RaceResult.energy</code>.</li>
+<li><strong>AC-X2</strong> The <strong>"why"</strong> names the <strong>dominant factor for this run</strong> in plain language and ties it to
+  a <strong>real building principle</strong> (e.g. "Your biggest slowdown was axle friction — polish your axles
+  and add graphite").</li>
+<li><strong>AC-X3</strong> <strong>No jargon:</strong> no technical unit or term (Joules, Newtons, coefficient, m/s², <code>C_d</code>, <code>μ</code>,
+  "moment of inertia", "normal force") appears in any kid-facing text. <em>(Checkable: scan all rendered
+  strings against a banned-term list.)</em></li>
+<li><strong>AC-X4</strong> <strong>Priority order preserved:</strong> across designs, the breakdown and "why" reflect the
+  engine's real ordering — improving <strong>weight/placement</strong> and <strong>friction</strong> yields the <strong>biggest</strong>
+  surfaced gains and <strong>aerodynamics the smallest</strong> (rides on engine AC-ED1; the UI surfaces it
+  faithfully and never inverts it).</li>
+</ul>
+<h3 id="garage-local-save-load">Garage (local save / load)</h3>
+<ul>
+<li><strong>AC-S1</strong> The current design can be <strong>named and saved</strong> to local browser storage and <strong>persists
+  across a reload</strong>.</li>
+<li><strong>AC-S2</strong> Saved designs are <strong>listed</strong>; loading one <strong>restores every control</strong> to the saved values,
+  and racing the loaded design <strong>reproduces its time</strong> (with AC-R3).</li>
+<li><strong>AC-S3</strong> A saved design can be <strong>deleted</strong> and storage <strong>cleared</strong>; <strong>nothing is sent off-device</strong>.</li>
+</ul>
+<h3 id="privacy-offline-safety">Privacy / offline / safety</h3>
+<ul>
+<li><strong>AC-P1</strong> After initial asset load, the app makes <strong>no network requests</strong> — no third-party CDNs, no
+  analytics, no telemetry; <strong>all assets (Pyodide runtime + engine) are same-origin.</strong> <em>(Checkable via
+  request interception in a headless browser.)</em></li>
+<li><strong>AC-P2</strong> <strong>No personal data</strong> is collected or transmitted; the <strong>only</strong> persisted data is local
+  car designs in browser storage. No accounts, no PII fields.</li>
+<li><strong>AC-P3</strong> The app <strong>works offline after first load</strong> (cached static assets / service worker).</li>
+</ul>
+<h3 id="accessibility-presentation">Accessibility &amp; presentation</h3>
+<ul>
+<li><strong>AC-A1</strong> All controls and <strong>Race</strong> are <strong>keyboard-operable and labeled</strong>, with a logical focus
+  order and visible focus; a full configure→race→read-result loop is possible without a mouse.</li>
+<li><strong>AC-A2</strong> <strong>Color is never the sole signal</strong> — legal/over-limit, finish/DNF, and the loss bars each
+  carry text/icon labels; kid-facing text and controls meet <strong>WCAG-AA</strong> contrast.</li>
+<li><strong>AC-A3</strong> The layout is <strong>legible on a projector and a Chromebook</strong> — responsive to ~1024px wide,
+  with large, distinct touch/click targets.</li>
+</ul>
+<h3 id="engine-integration">Engine integration</h3>
+<ul>
+<li><strong>AC-G1</strong> The front-end consumes the engine's <strong>public API</strong> (<code>simulate</code>, <code>CarDesign</code>, <code>Track</code>,
+  <code>RaceResult</code>) <strong>unchanged</strong> and adds <strong>no physics</strong>; the translation layer imports from
+  <code>pinewood_derby</code> and computes only presentation. <em>(Checkable: no force/integration math outside the
+  engine package.)</em></li>
+</ul>
+<h2 id="7-non-functional-requirements">7. Non-functional requirements</h2>
+<table>
+<thead>
+<tr>
+<th>NFR</th>
+<th>Requirement</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Privacy / safety</td>
+<td>No PII, no accounts, no network at runtime, no third-party calls — safe for children</td>
+<td>AC-P1/P2</td>
+</tr>
+<tr>
+<td>Offline</td>
+<td>Usable offline after first load</td>
+<td>AC-P3</td>
+</tr>
+<tr>
+<td>Performance — load</td>
+<td>First load (incl. Pyodide warm-up) is usable within a few seconds on a typical Chromebook; a <strong>loading state</strong> is shown until ready</td>
+<td>timed/manual check; loading indicator present</td>
+</tr>
+<tr>
+<td>Performance — race</td>
+<td>After warm-up, a race result renders within <strong>~100 ms</strong> of pressing Race (engine itself is &lt; 5 ms per profile); animation runs at <strong>≥ 30 fps</strong></td>
+<td>timed test / frame check</td>
+</tr>
+<tr>
+<td>Determinism</td>
+<td>Same design ⇒ same time &amp; animation (fixed seed)</td>
+<td>AC-R3</td>
+</tr>
+<tr>
+<td>Accessibility</td>
+<td>Keyboard-operable; WCAG-AA contrast; not color-only</td>
+<td>AC-A1/A2</td>
+</tr>
+<tr>
+<td>Browser support</td>
+<td>Current evergreen Chrome/Edge/Safari/Firefox; <strong>Chromebook Chrome</strong> is a first-class target</td>
+<td>smoke matrix</td>
+</tr>
+<tr>
+<td>Educational accuracy</td>
+<td>The surfaced ranking &amp; "why" never contradict the engine's physics or priority order</td>
+<td>AC-X1/X2/X4</td>
+</tr>
+<tr>
+<td>Translation purity &amp; coverage</td>
+<td>Translation layer is pure, DOM-free, deterministic; <strong>≥ 90%</strong> unit coverage (mirrors the engine bar)</td>
+<td><code>pytest --cov</code></td>
+</tr>
+<tr>
+<td>Maintainability</td>
+<td>Front-end adds no physics; engine stays pure &amp; dependency-free</td>
+<td>AC-G1</td>
+</tr>
+</tbody>
+</table>
+<h2 id="8-assumptions-decisions">8. Assumptions &amp; decisions</h2>
+<p>Defaults the Planner chose where the spec/profile were silent or in tension. Items marked
+<strong>[confirmed 2026-06-02]</strong> were set by the user this session; the rest are documented defaults the
+user may revise at the approval gate.</p>
+<ul>
+<li><strong>A1 — Platform [confirmed 2026-06-02]:</strong> static web app, <strong>engine in-browser via Pyodide (WASM)</strong>,
+  hosted on <strong>GitHub Pages</strong>, <strong>all assets same-origin (no CDN)</strong>, <strong>no network at runtime</strong>. The
+  pure Python engine ports unchanged.</li>
+<li><strong>A2 — Audience 12–17, skewed young [confirmed 2026-06-02]:</strong> reconciles the conflict between the
+  profile (~7–12) and the <code>0001</code> PRD/spec (12–17) <strong>in favor of 12–17</strong>, with <strong>reading level and tone
+  tuned to the younger end (~12)</strong> per the user. The <strong>profile should be updated</strong> to match (it also
+  governs <code>0005</code>); see §9 OQ1.</li>
+<li><strong>A3 — Save/load in v1 [confirmed 2026-06-02]:</strong> a single-device <strong>garage</strong> via browser
+  <code>localStorage</code>; offline, no accounts.</li>
+<li><strong>A4 — Contract now frozen; build can begin [updated 2026-06-02]:</strong> <code>0001-physics-engine</code> is
+  <strong><code>done</code></strong> — its <code>simulate(...) -&gt; RaceResult</code> / <code>CarDesign</code> contract is stable and was <strong>verified
+  against the source</strong> this session. The original "defer until the engine settles" rationale is
+  satisfied; 0003 may enter the build loop. (The garage JSON still carries a <code>schemaVersion</code> in case a
+  later engine revision changes <code>CarDesign</code> — TRD §7.)</li>
+<li><strong>A4a — Package does not re-export its public API [flagged 2026-06-02]:</strong> <code>pinewood_derby/__init__.py</code>
+  currently exports nothing (<code>__version__</code> only); <code>simulate</code>, <code>CarDesign</code>, <code>Track</code>, <code>RaceResult</code> live
+  in submodules (<code>.engine</code>, <code>.car</code>, <code>.track</code>, <code>.result</code>). The bridge/<code>present.py</code> will therefore import
+  from the <strong>submodules</strong>, <em>or</em> <code>0001</code> adds a small re-export to <code>__init__.py</code>. Tracked as a tiny
+  follow-up for <code>0001</code> (or an import-path decision at build) — not a blocker.</li>
+<li><strong>A5 — Front-end stack (default, revisable):</strong> <strong>vanilla TypeScript + Vite + an HTML <code>&lt;canvas&gt;</code></strong>
+  for the 2-D track animation, with <strong>Pyodide vendored</strong> into the static bundle. Keeps the bundle
+  lean and matches the app's minimalist, dependency-light ethos. (See §9 OQ2.)</li>
+<li><strong>A6 — Fixed seed in the UI:</strong> the UI pins the engine <code>seed</code> so a design's time is reproducible
+  (AC-R3) and a future leaderboard is fair. A design's time is a stable function of its design.</li>
+<li><strong>A7 — Kid-facing numbers:</strong> the <strong>race time in seconds</strong> is allowed (legible, not jargon); raw
+  speed is shown <strong>visually/relatively</strong>, never as <code>m/s</code>. The energy ledger is shown as <strong>relative
+  proportions / bars</strong>, never Joules.</li>
+<li><strong>A8 — "Where did your speed go?" mapping:</strong> derived from <code>RaceResult.energy</code> —
+  <code>w_drag</code>→"pushing air", <code>w_axle</code>→"axle friction", <code>w_rail</code>→"bumping the rails",
+  <code>ke_rotational_final</code>→"spinning the wheels", final linear KE→"speed you kept". Ranked largest-first.</li>
+<li><strong>A9 — Test tooling expansion:</strong> the pure translation layer is tested with the profile's
+  <code>uv run pytest</code>; the <strong>DOM/UI</strong> needs a <strong>headless-browser</strong> test runner (e.g. Playwright), which
+  adds dev tooling beyond the current Python-only toolchain. The <strong>profile's <code>commands</code>/stack will
+  need a follow-up update</strong> to cover the web build &amp; UI tests.</li>
+</ul>
+<blockquote>
+<p><strong>Profile drift flagged (for the synthesizer / a profile update):</strong> this feature moves the app from
+"pure-Python desktop (pygame)" toward "static web + Pyodide." The profile's <code>framework</code>,
+<code>commands</code> (build/test/run), <code>archetype</code>, deployment target, and audience age all need a refresh to
+stay consistent. That update is <strong>out of scope for this PRD</strong> but is called out so it isn't lost.</p>
+</blockquote>
+<h2 id="9-open-questions-resolved-at-approval-2026-06-02">9. Open questions — resolved at approval (2026-06-02)</h2>
+<p>All three were resolved by the user at the approval gate; recorded here and in <code>feature.json</code>.</p>
+<ol>
+<li><strong>OQ1 — Audience → 12–17, skewed young. [resolved]</strong> Reconcile the profile's <code>~7–12</code> to <strong>12–17</strong>
+   (matching the <code>0001</code> PRD/spec), with <strong>reading level and tone tuned to the younger end (~12)</strong>. A
+   follow-up <strong>profile update</strong> (also governing <code>0005</code>) is required; flagged for the synthesizer.</li>
+<li><strong>OQ2 — Stack: vanilla TypeScript + Vite + canvas, Pyodide vendored same-origin. [resolved]</strong> User
+   had no preference and asked for the simplest robust option; the Planner selected A5 — no framework
+   runtime, smallest bundle, easiest to keep same-origin/offline, good UX. No effect on user-visible
+   behavior.</li>
+<li><strong>OQ3 — Distinguish the two non-finish modes. [resolved]</strong> The engine's single <code>outcome=DNF</code> covers
+   both an <strong>unstable wobble/crash</strong> and a <strong>stable-but-underpowered car that stopped short</strong>; the
+   presentation layer must tell them apart from <code>trajectory</code> + <code>normal_forces</code> and never show a slow
+   car as a crash. Folded in as <strong>AC-R4</strong> (carried over from <code>0001</code> WI12-ADV-006, adjudicated
+   2026-06-03 as a presentation concern, not an engine defect).</li>
+</ol>
+</div></body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "name": "pinewood-derby-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Web front-end (0003) for the pinewood-derby-sim engine: TypeScript + Vite + canvas, engine in-browser via vendored Pyodide.",
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs",
+    "dev": "npm run vendor && vite",
+    "build": "npm run vendor && tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "npm run vendor && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1",
+    "eslint": "^10.4.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1",
+    "vite": "^8.0.16"
+  },
+  "dependencies": {
+    "pyodide": "^0.29.4"
+  }
+}

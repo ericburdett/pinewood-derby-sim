@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRD — Web Front-End (Interactive Car Builder & Race UI)</title>
+<style>
+:root { --ink:#1c2330; --muted:#5a6478; --line:#dfe3ea; --accent:#2563eb; --bg:#ffffff; --soft:#f6f8fb; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--soft); color:var(--ink);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+.page { max-width: 820px; margin: 32px auto; background:var(--bg); padding: 48px 56px;
+  border:1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+h1 { font-size: 26px; margin: 0 0 18px; padding-bottom: 12px; border-bottom: 2px solid var(--line); }
+h2 { font-size: 19px; margin: 30px 0 10px; color: var(--accent); }
+h3 { font-size: 16px; margin: 22px 0 8px; }
+p, li { color: var(--ink); }
+code { background: var(--soft); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size: 90%; }
+pre { background: var(--soft); border:1px solid var(--line); border-radius:8px; padding:14px; overflow-x:auto; }
+pre code { border:0; padding:0; background:none; }
+blockquote { margin: 14px 0; padding: 8px 16px; border-left: 4px solid var(--accent); background: var(--soft); color: var(--muted); }
+table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+th, td { border:1px solid var(--line); padding: 8px 11px; text-align:left; font-size: 14.5px; vertical-align: top; }
+th { background: var(--soft); }
+a { color: var(--accent); }
+hr { border:0; border-top:1px solid var(--line); margin: 26px 0; }
+@media print { body { background:#fff; } .page { border:0; box-shadow:none; margin:0; max-width:none; } }
+</style>
+</head>
+<body><div class="page">
+<h1 id="trd-web-front-end-interactive-car-builder-race-ui">TRD — Web Front-End (Interactive Car Builder &amp; Race UI)</h1>
+<ul>
+<li><strong>App:</strong> pinewood-derby-sim · <strong>Feature:</strong> <code>0003-web-front-end</code></li>
+<li><strong>Status:</strong> approved — 2026-06-02</li>
+<li><strong>Companion:</strong> <a href="./PRD.md"><code>PRD.md</code></a> · <strong>Engine contract:</strong> <a href="../0001-physics-engine/TRD.md"><code>0001-physics-engine/TRD.md</code></a> ·
+  <strong>Domain truth:</strong> <a href="../../docs/physics-spec.md"><code>docs/physics-spec.md</code></a> · <strong>Profile:</strong> <a href="../../profile.md"><code>profile.md</code></a></li>
+<li><strong>Last updated:</strong> 2026-06-02</li>
+</ul>
+<p>This TRD describes <em>how</em> to build the front-end specified in the PRD. It honors the profile's hard
+constraints (no network at runtime, no PII, safe for children, engine stays pure &amp; dependency-free)
+and the platform decision (static web + Pyodide on GitHub Pages). It also flags where this feature
+<strong>expands the app's stack</strong> beyond pure Python.</p>
+<hr />
+<h2 id="1-architecture-overview">1. Architecture overview</h2>
+<p>A <strong>static single-page app</strong> with the <strong>pure Python engine running in the browser</strong> via Pyodide.
+Two clean layers, one boundary:</p>
+<pre><code>┌──────────────────────────────────────────────────────────────────┐
+│ Browser (static site, same-origin assets, no network at runtime)  │
+│                                                                    │
+│  ┌── UI (TypeScript) ─────────────┐   ┌── Pyodide (WASM) ───────┐  │
+│  │ Builder controls               │   │ pinewood_derby (0001)   │  │
+│  │ Track &lt;canvas&gt; animation       │   │   simulate(car) → Result│  │
+│  │ Result / &quot;why&quot; panel           │◄─►│ pinewood_derby.present  │  │
+│  │ Garage (localStorage)          │   │   (NEW pure translation)│  │
+│  └────────────────────────────────┘   └─────────────────────────┘  │
+│            ▲ JS ↔ Python bridge (Pyodide proxies, JSON-able DTOs)   │
+└──────────────────────────────────────────────────────────────────┘
+        hosted on GitHub Pages (static files only)
+</code></pre>
+<ul>
+<li><strong>Engine stays pure &amp; untouched</strong> (<code>0001</code>). The front-end imports it; it adds <strong>no physics</strong>
+  (PRD AC-G1).</li>
+<li><strong>Translation layer = the folded <code>0002</code></strong>, implemented as a <strong>new pure Python module</strong>
+  <code>pinewood_derby/present.py</code> (DOM-free, unit-tested with <code>pytest</code>). It maps <code>RaceResult</code> +
+  <code>CarDesign</code> → a <strong>JSON-serializable view-model</strong> the JS UI renders. Keeping it in Python (a) reuses
+  the profile's <code>uv run pytest</code> bar, (b) keeps all "what does this number mean" logic on one side of
+  the bridge, and (c) ports for free if the app is ever re-hosted.</li>
+<li><strong>UI is thin TypeScript:</strong> read controls → build a <code>CarDesign</code> (in Python, over the bridge) →
+  <code>simulate</code> → <code>present</code> → render the returned view-model + animate the trajectory. No physics, no
+  domain rules duplicated in JS.</li>
+</ul>
+<h2 id="2-platform-hosting">2. Platform &amp; hosting</h2>
+<ul>
+<li><strong>Pyodide, vendored same-origin.</strong> The Pyodide runtime (<code>.js</code> + <code>.wasm</code> + stdlib) and the
+  <code>pinewood_derby</code> package (shipped as a <strong>pure-Python wheel</strong> built from <code>0001</code>, or loaded as source
+  via <code>loadPackage</code>/<code>pyodide.FS</code>) are committed/copied into the published site. <strong>No CDN</strong> — required
+  by PRD AC-P1 (no third-party calls) and to work offline (AC-P3).</li>
+<li><strong>GitHub Pages.</strong> Static hosting; a CI workflow builds the site (Vite) + the engine wheel and
+  publishes to Pages. Pages cannot run server code — fine, there is none. <em>(Single-threaded Pyodide
+  only; we do </em><em>not</em><em> use <code>SharedArrayBuffer</code>/threads, so the COOP/COEP headers Pages can't set are
+  not needed.)</em></li>
+<li><strong>Offline (AC-P3).</strong> A <strong>service worker</strong> precaches all static assets (HTML/JS/CSS/Pyodide/wheel)
+  so the app loads offline after the first visit. The SW makes no network fetches of its own.</li>
+</ul>
+<h2 id="3-component-module-layout">3. Component / module layout</h2>
+<pre><code>web/                              # NEW front-end workspace (TypeScript + Vite)
+  index.html
+  src/
+    main.ts                       # bootstrap: load Pyodide, wire UI
+    pyodide-bridge.ts             # load runtime + engine wheel; typed call wrappers
+    controls/                     # builder inputs → control-state
+      controls.ts                 # six levers + weight; constrained to valid domains (AC-C1)
+      presets.ts                  # default car (AC-C2) + named &quot;good/bad build&quot; demo presets
+    race/
+      animator.ts                 # &lt;canvas&gt; 2-D side-view; plays RaceResult.trajectory (AC-R1/R2)
+    result/
+      result-view.ts              # renders the view-model: time, &quot;where did your speed go&quot;, &quot;why&quot;
+    garage/
+      garage.ts                   # save/list/load/delete via localStorage (AC-S1/2/3)
+    a11y/, styles/                # focus management, WCAG-AA theme (AC-A1/A2/A3)
+  sw.ts                           # service worker: precache static assets (AC-P3)
+  public/pyodide/                 # vendored Pyodide runtime (same-origin, no CDN)
+  tests-e2e/                      # Playwright headless-browser specs (UI ACs)
+
+src/pinewood_derby/
+  present.py                      # NEW pure translation layer (the folded 0002)
+tests/
+  test_present.py                # NEW pytest unit tests for present.py
+</code></pre>
+<p>The Python side adds exactly <strong>one</strong> new module (<code>present.py</code>) to the existing pure package; all UI
+lives under the new <code>web/</code> workspace.</p>
+<h2 id="4-translation-layer-pinewood_derbypresentpy-pure-the-folded-0002">4. Translation layer — <code>pinewood_derby/present.py</code> (pure, the folded 0002)</h2>
+<p>A pure function from engine output to a kid-facing, JSON-serializable view-model. <strong>No DOM, no I/O,
+no physics, no technical units</strong> (PRD AC-X3).</p>
+<pre><code class="language-python">@dataclass(frozen=True)
+class LossBar:
+    key: str            # &quot;air&quot; | &quot;axle&quot; | &quot;rails&quot; | &quot;wheels&quot; | &quot;kept&quot;
+    label: str          # plain language, e.g. &quot;Axle friction&quot;
+    proportion: float   # 0..1 share of the energy story (for bar length); NOT joules
+    is_kept: bool       # the &quot;speed you kept&quot; bar vs a loss
+
+Outcome = Literal[&quot;finished&quot;, &quot;tipped&quot;, &quot;stalled&quot;]   # AC-R4: two distinct non-finish stories
+
+@dataclass(frozen=True)
+class RaceView:
+    finished: bool
+    outcome: Outcome                  # &quot;finished&quot; | &quot;tipped&quot; (wobble/crash) | &quot;stalled&quot; (ran out of speed) — AC-R4
+    time_seconds: float | None        # None for any non-finish (PRD AC-R2); seconds is allowed (A7)
+    stopped_distance_frac: float | None  # for &quot;stalled&quot;: how far it got (0..1), to say &quot;stopped just short&quot;
+    legal_weight: bool
+    headline: str                     # &quot;Nice! 2.91 seconds.&quot; / &quot;Your car wobbled and tipped.&quot; / &quot;Ran out of speed, just short.&quot;
+    breakdown: tuple[LossBar, ...]    # ranked largest-first (AC-X1)
+    why: str                          # dominant-factor coaching tied to a real principle (AC-X2); outcome-specific for non-finishes
+    tips: tuple[str, ...]             # 1–3 next-step suggestions, priority-ordered (AC-X4)
+    trajectory: tuple[FramePoint, ...]# down-sampled points the animator replays
+
+def present(result: RaceResult, car: CarDesign) -&gt; RaceView: ...
+def to_json(view: RaceView) -&gt; dict: ...   # plain dict for the JS bridge
+</code></pre>
+<ul>
+<li><strong>"Where did your speed go?" (AC-X1, A8):</strong> map ledger fields → bars —
+  <code>w_drag</code>→<code>air</code>, <code>w_axle</code>→<code>axle</code>, <code>w_rail</code>→<code>rails</code>, <code>ke_rotational_final</code>→<code>wheels</code>,
+  final linear KE→<code>kept</code>. Normalize to proportions of the <strong>energy actually delivered on this run</strong> —
+  i.e. the <strong>integrated gravity work <code>w_gravity</code></strong> (which the per-force ledger closes against:
+  <code>w_gravity − w_drag − w_axle − w_rail = ke_linear + ke_rotational</code>), <strong>not <code>pe_initial</code></strong> — so the
+  bars sum to ~1 for <em>both</em> a finisher and a stalled car (a stalled car descends only part of the
+  ramp, so <code>w_gravity &lt; pe_initial</code>). <strong>Guard the all-zero ledger</strong> (a <code>tipped</code> DNF has
+  <code>w_gravity == 0</code>): emit <strong>no breakdown bars</strong> for a tip — its story is the wobble headline, not a
+  loss chart. <strong>Rank largest-first.</strong></li>
+<li><strong>"Why" (AC-X2, AC-X4):</strong> pick the <strong>largest <em>loss</em></strong> bar and emit the matching plain-language
+  principle from a small, reviewed lookup table (axle→polish &amp; graphite; rails→fix alignment /
+  rail-ride; air→smoother/lower body; wheels→lighter, truer wheels; plus weight/placement coaching
+  driven by <code>legal_weight</code> and <code>car.com_ahead_of_rear_axle</code>). The table encodes the <strong>real priority
+  order</strong>, so tips never invert it (aero is never advised over weight/friction). A <strong>banned-terms
+  guard</strong> (shared with the test) keeps jargon out.</li>
+<li><strong>Non-finish disambiguation (AC-R2 / AC-R4):</strong> <code>finished=False</code>, <code>time_seconds=None</code>, then classify
+  the single engine <code>outcome=DNF</code> into <strong>two</strong> view outcomes <strong>from the trajectory + ledger</strong> (verified
+  against <code>engine.py</code>/<code>result.py</code> 2026-06-02):</li>
+<li><strong><code>tipped</code></strong> — the engine short-circuits an unstable car (front-load fraction <code>d_COM/L</code> below the
+    cliff) <strong>before the run starts</strong>: the result has a <strong>single <code>trajectory</code> point at <code>position == 0</code></strong>
+    and an <strong>all-zero work ledger</strong> (<code>w_gravity == w_drag == w_axle == w_rail == 0</code>,
+    <code>ke_*_final == 0</code>). Detect via <code>len(trajectory) == 1 and trajectory[0].position == 0.0</code>. Headline +
+    "why" speak to <strong>wobble/tip</strong>: weight too far back / past the stability cliff. <code>stopped_distance_frac
+    = 0.0</code>.</li>
+<li><strong><code>stalled</code></strong> — the car ran but its velocity hit zero <strong>before</strong> the finish: a <strong>multi-point
+    trajectory</strong> whose <strong>last <code>position</code> satisfies <code>0 &lt; position &lt; track_length</code></strong>, with
+    <code>finish_velocity ≈ 0</code> and a non-trivial ledger. Record <code>stopped_distance_frac = last_position /
+    track_length</code> and speak to <strong>"ran out of speed and stopped just short"</strong>: too much friction / not
+    enough starting energy — <em>not</em> a crash. <em>(The rare 60 s wall-clock guard — a near-stationary crawl —
+    also lands here and is messaged as a stall.)</em></li>
+<li><strong>Discriminator note:</strong> <code>normal_forces</code> is a <strong>single static <code>(front, rear)</code> pair</strong> computed once on
+    the flat (<code>result.py</code>), <strong>not</strong> a per-frame series, and <code>front = M·g·(d_COM/L) ≥ 0</code> always — so it
+    is <strong>not</strong> usable to detect a tip. The trajectory/ledger signals above are the real evidence.
+  The classifier reads only <code>outcome</code>, <code>trajectory</code>, and the ledger — no new physics (AC-G1).</li>
+<li><strong>Purity:</strong> frozen dataclasses, deterministic, ≥ 90% unit coverage (PRD NFR). Tested entirely
+  without a browser.</li>
+</ul>
+<h2 id="5-ui-python-bridge">5. UI ↔ Python bridge</h2>
+<ul>
+<li><strong>Import paths (verified 2026-06-02):</strong> <code>pinewood_derby/__init__.py</code> does <strong>not</strong> re-export the
+  public API (it sets <code>__version__</code> only), so the Python side imports from the <strong>submodules</strong> —
+  <code>from pinewood_derby.engine import simulate</code>, <code>from pinewood_derby.car import CarDesign</code>,
+  <code>from pinewood_derby.result import RaceResult</code>, <code>from pinewood_derby.track import STANDARD_TRACK</code>.
+  Alternatively <code>0001</code> adds a one-line re-export to <code>__init__.py</code> (tracked as a tiny follow-up, PRD A4a).</li>
+<li>On boot, <code>pyodide-bridge.ts</code> loads the vendored runtime, then the <code>pinewood_derby</code> wheel, and
+  exposes typed wrappers:</li>
+<li><code>buildCar(controlState) → PyProxy(CarDesign)</code> — constructs the design <strong>in Python</strong> so the
+    engine's own validation is the single source of truth (PRD AC-C1); a <code>ValueError</code> is caught and
+    surfaced as an inline control message, never a stack trace.</li>
+<li><code>race(car) → RaceView(JSON)</code> — calls <code>simulate(car, seed=FIXED_SEED)</code> then <code>present(...)</code>,
+    returning a plain JSON object (no lingering proxies) for the renderer (AC-R3 determinism via the
+    fixed seed, A6).</li>
+<li>Control domains in <code>controls.ts</code> mirror the engine's validation bounds so the UI <strong>pre-constrains</strong>
+  inputs; the Python validation remains the backstop. (Two-layer guard for AC-C1.)</li>
+<li><code>CarDesign</code> (de)serialization for the garage goes through a small Python <code>to_dict</code>/<code>from_dict</code>
+  (or a <code>present.py</code> helper), so localStorage holds a <strong>plain, versioned JSON</strong> snapshot — not a
+  proxy — and load reconstructs + re-validates it (AC-S2).</li>
+</ul>
+<h2 id="6-animation-raceanimatorts">6. Animation (<code>race/animator.ts</code>)</h2>
+<ul>
+<li>A 2-D side view of <code>STANDARD_TRACK</code> (ramp → transition arc → flat) drawn on <code>&lt;canvas&gt;</code>; the car
+  sprite is placed each frame from <code>RaceResult.trajectory</code> (position along the arc → screen x/y, plus
+  the track angle for rotation). A running clock counts up to <code>race_time_s</code>.</li>
+<li><strong>Non-finish (AC-R2/AC-R4):</strong> a <strong><code>stalled</code></strong> car has a real multi-point trajectory, so it animates
+  its run and <strong>coasts to a visible halt short of the line</strong> (no crash visuals). A <strong><code>tipped</code></strong> car has
+  only the single at-rest start point (the engine rules it unstable before the run), so there is <strong>no
+  run to animate</strong> — it shows a <strong>wobble-at-the-start-line</strong> state instead. The two are rendered
+  distinctly to match their headlines.</li>
+<li><strong>Determinism:</strong> same trajectory in ⇒ same animation out (AC-R3).</li>
+<li><strong>Perf:</strong> <code>requestAnimationFrame</code>, target <strong>≥ 30 fps</strong>; the trajectory is already down-sampled
+  (≤ ~500 pts by the engine), so per-frame work is trivial.</li>
+<li><strong>Duration basis:</strong> scale playback off the <strong>trajectory's own last <code>t</code></strong>, <em>not</em> <code>race_time_s</code>
+  (which is <code>None</code> for a non-finisher). A finisher plays near real-time (~3–4 s). A <strong><code>stalled</code></strong> run
+  can carry a much longer trajectory <code>t</code> (the engine's stall path runs up to a 60 s wall-clock guard),
+  so <strong>cap/compress</strong> the non-finisher playback to a few legible seconds rather than replaying a
+  60 s crawl. A <strong><code>tipped</code></strong> run has a single <code>t=0</code> frame, so there is no timeline to scale.</li>
+</ul>
+<h2 id="7-garage-persistence-garagegaragets">7. Garage / persistence (<code>garage/garage.ts</code>)</h2>
+<ul>
+<li><code>localStorage</code> keyed under a single namespace (e.g. <code>pds.garage.v1</code>), holding a JSON map of
+  <code>name → { schemaVersion, design }</code>.</li>
+<li>Operations: <strong>save</strong> (name + current design), <strong>list</strong>, <strong>load</strong> (restore controls + re-validate),
+  <strong>delete</strong>, <strong>clear</strong>. All synchronous, on-device (AC-S1/S2/S3).</li>
+<li><strong>No PII, no network</strong> (AC-P2): the only stored data is car designs the user explicitly saves; a
+  visible "clear my garage" control exists.</li>
+<li>A <code>schemaVersion</code> on each entry allows safe migration if <code>CarDesign</code> changes (relevant given the
+  build is deferred until the engine contract settles — A4).</li>
+</ul>
+<h2 id="8-privacy-offline-safety-prd-ac-p1p2p3">8. Privacy, offline &amp; safety (PRD AC-P1/P2/P3)</h2>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No network at runtime</td>
+<td>All assets same-origin &amp; vendored; <strong>no CDN, no fonts/analytics/embeds</strong>; no <code>fetch</code>/<code>XHR</code>/<code>WebSocket</code> to any origin</td>
+</tr>
+<tr>
+<td>No PII / data collection</td>
+<td>Only <code>localStorage</code> car designs; no accounts, no input fields for personal data, no telemetry</td>
+</tr>
+<tr>
+<td>Works offline</td>
+<td>Service worker precaches the full static bundle; subsequent loads need no network</td>
+</tr>
+<tr>
+<td>Safe for children</td>
+<td>Encouraging copy, no external links opened without intent; the <code>0004</code> leaderboard (the only network feature) is explicitly <strong>not</strong> here</td>
+</tr>
+</tbody>
+</table>
+<p>CI/lint check: a test asserts the built bundle references <strong>no off-origin URLs</strong> (guards AC-P1
+against regressions).</p>
+<h2 id="9-accessibility-prd-ac-a1a2a3">9. Accessibility (PRD AC-A1/A2/A3)</h2>
+<ul>
+<li>Native, labeled form controls (<code>&lt;input type=range&gt;</code>, toggles, buttons) with <code>&lt;label&gt;</code>/<code>aria-*</code>;
+  logical tab order; visible focus rings; <strong>Race</strong> reachable and operable by keyboard.</li>
+<li>Results announced via an <code>aria-live</code> region so a screen reader reads the time + "why" after a race.</li>
+<li><strong>WCAG-AA</strong> contrast theme; <strong>never color-only</strong> — legal/over-limit, finish/DNF, and each loss bar
+  carry text + icon. Animation respects <code>prefers-reduced-motion</code> (offer a static end-state).</li>
+<li>Responsive down to ~1024px; large targets for projector/Chromebook use.</li>
+</ul>
+<h2 id="10-dependencies-stack-changes">10. Dependencies &amp; stack changes</h2>
+<ul>
+<li><strong>Python (runtime):</strong> unchanged — <code>pinewood_derby</code> stays <strong>stdlib-only</strong>; <code>present.py</code> adds no
+  dependency. <code>pyproject</code> <code>dependencies = []</code> holds.</li>
+<li><strong>New front-end toolchain (the stack expansion this feature introduces):</strong></li>
+<li><strong>TypeScript + Vite</strong> build; <strong>Pyodide</strong> vendored as a static asset.</li>
+<li><strong>Playwright</strong> (dev) for headless-browser UI tests; <strong>Vitest</strong> (or equivalent) for any pure TS
+    units.</li>
+<li>A <strong>CI workflow</strong> to build the engine wheel + the Vite bundle and deploy to GitHub Pages.</li>
+<li><strong>Profile impact (flagged, not done here):</strong> the profile's <code>framework</code>, <code>commands</code>
+  (build/test/run for the web app), <code>archetype</code> (desktop-app → web-app), deployment target, and
+  audience age (→ 12–17) all need a follow-up update for consistency. Tracked as a flag for the
+  synthesizer / a profile-update task (PRD §8).</li>
+</ul>
+<h2 id="11-risks-mitigations">11. Risks &amp; mitigations</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Engine contract still in flux</strong> (<code>0001</code> building) — UI built against a moving target</td>
+<td><strong>Defer build</strong> until the contract stabilizes (A4); isolate all engine touchpoints behind <code>pyodide-bridge.ts</code> + the Python <code>present.py</code>/<code>to_dict</code>; version the garage JSON for migration</td>
+</tr>
+<tr>
+<td><strong>Pyodide first-load weight</strong> (several MB) hurts the Chromebook/demo experience</td>
+<td>Show a loading state (NFR); precache via service worker so it's a one-time cost; vendor + compress assets; lazy-load nothing the first race needs</td>
+</tr>
+<tr>
+<td><strong>Physics/units leaking to the kid</strong> (jargon, Joules)</td>
+<td>All translation in one pure module with a <strong>banned-terms guard</strong> shared by <code>test_present.py</code> and a UI text scan (AC-X3)</td>
+</tr>
+<tr>
+<td><strong>Priority order inverted in tips</strong> (teaching wrong order)</td>
+<td>The "why"/tips lookup is <strong>reviewed, table-driven, priority-ordered</strong>; a domain test asserts weight/placement &amp; friction outrank aero across sample designs (AC-X4, rides engine AC-ED1)</td>
+</tr>
+<tr>
+<td><strong>Determinism breaks</strong> (random seed, animation jitter)</td>
+<td>UI pins <code>seed=FIXED_SEED</code> (A6); animation is a pure function of the returned trajectory; AC-R3 test races twice and asserts identical time/frames</td>
+</tr>
+<tr>
+<td><strong>Accidental third-party call</strong> (font, CDN, analytics) creeps in</td>
+<td>Same-origin-only policy + a build test asserting <strong>no off-origin URLs</strong> in the bundle (AC-P1)</td>
+</tr>
+<tr>
+<td><strong>Test stack expansion</strong> beyond the profile's Python-only toolchain</td>
+<td>Keep the <strong>richest logic in pure Python</strong> (<code>present.py</code>, <code>pytest</code>); limit browser tests to genuinely UI behavior; document the new commands for the profile update</td>
+</tr>
+<tr>
+<td><strong>Bigger UI surface than a TDD-friendly unit</strong></td>
+<td>Push testable logic into <code>present.py</code> + control-domain mapping (unit-testable); reserve Playwright for a small set of end-to-end ACs (race, DNF, save/load, no-network, keyboard)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="12-test-strategy">12. Test strategy</h2>
+<ul>
+<li><strong>Pure translation layer (<code>present.py</code>) — <code>uv run pytest</code>, the primary bar:</strong></li>
+<li>View-model mapping: ledger → ranked <code>LossBar</code>s largest-first (AC-X1); dominant-factor "why"
+    selection (AC-X2); legal/over-limit headline (AC-C3).</li>
+<li><strong>Non-finish classifier (AC-R4):</strong> drive <code>present()</code> with <strong>real <code>simulate()</code> output</strong> (not
+    hand-built fixtures): an unstable design (<code>d_COM/L</code> below the cliff) → <code>outcome="tipped"</code>,
+    <code>stopped_distance_frac == 0</code>, single-point trajectory, all-zero ledger; a stable-but-underpowered
+    design (e.g. a light ~1–2 oz car that stalls short) → <code>outcome="stalled"</code>,
+    <code>0 &lt; stopped_distance_frac &lt; 1</code>, <em>non-crash</em> message. Assert the two never collapse into one and a
+    slow finisher (<code>outcome="finished"</code>) is neither.</li>
+<li><strong>Banned-terms guard:</strong> assert no jargon in any emitted string across a matrix of designs
+    (AC-X3).</li>
+<li><strong>Priority-order domain test:</strong> across sample designs, weight/placement &amp; friction produce the
+    largest surfaced losses/tips, aero the smallest (AC-X4).</li>
+<li>Determinism: <code>present(simulate(car, seed=S), car)</code> is stable (AC-R3, data side).</li>
+<li><strong>≥ 90% coverage</strong> on <code>present.py</code> (PRD NFR).</li>
+<li><strong>UI — Playwright (headless), one spec per UI AC:</strong> default car loads &amp; races (AC-C2/R1);
+  out-of-range/invalid input never throws (AC-C1); over-limit raceable + flagged (AC-C3); both
+  non-finish states render distinctly — <code>tipped</code> vs <code>stalled</code> (AC-R2/AC-R4); race-twice determinism
+  (AC-R3); save→reload→load→race (AC-S1/S2/S3); <strong>no off-origin
+  network requests</strong> via request interception (AC-P1); offline load after first visit (AC-P3);
+  keyboard-only loop + <code>aria-live</code> result (AC-A1); not-color-only / contrast (AC-A2).</li>
+<li><strong>Engine untouched:</strong> the <code>0001</code> suite continues to pass; a guard asserts no physics math lives
+  outside <code>pinewood_derby</code> (AC-G1).</li>
+</ul>
+<h2 id="13-traceability-ac-component">13. Traceability (AC → component)</h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>ACs</th>
+<th>Primary component(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Controls → CarDesign</td>
+<td>AC-C1, AC-C2, AC-C3</td>
+<td><code>controls.ts</code>, <code>presets.ts</code>, <code>pyodide-bridge.ts</code></td>
+</tr>
+<tr>
+<td>Race &amp; animation</td>
+<td>AC-R1, AC-R2, AC-R3, AC-R4</td>
+<td><code>animator.ts</code>, <code>pyodide-bridge.ts</code>, <code>present.py</code> (non-finish classifier)</td>
+</tr>
+<tr>
+<td>Explanation / "why"</td>
+<td>AC-X1, AC-X2, AC-X3, AC-X4</td>
+<td><code>present.py</code>, <code>result-view.ts</code></td>
+</tr>
+<tr>
+<td>Garage</td>
+<td>AC-S1, AC-S2, AC-S3</td>
+<td><code>garage.ts</code>, <code>present.py</code> (to_dict/from_dict)</td>
+</tr>
+<tr>
+<td>Privacy / offline / safety</td>
+<td>AC-P1, AC-P2, AC-P3</td>
+<td>bundle policy, <code>sw.ts</code>, <code>garage.ts</code></td>
+</tr>
+<tr>
+<td>Accessibility</td>
+<td>AC-A1, AC-A2, AC-A3</td>
+<td><code>a11y/</code>, <code>styles/</code>, <code>result-view.ts</code></td>
+</tr>
+<tr>
+<td>Engine purity</td>
+<td>AC-G1</td>
+<td><code>present.py</code>, <code>pyodide-bridge.ts</code></td>
+</tr>
+</tbody>
+</table>
+</div></body>
+</html>
