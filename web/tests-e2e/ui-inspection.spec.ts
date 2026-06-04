@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
 });
 
-const RULES = ["Weight", "Width", "Length", "Height", "Ground clearance"];
+const RULES = ["Weight", "Width", "Length", "Height"];
 
 test("a legal default car passes every inspection rule, live", async ({ page }) => {
   await gotoReady(page);
@@ -31,12 +31,6 @@ test("each illegal dimension is flagged live, without racing", async ({ page }) 
 
   await setRange(page, "#body-height", "4.0"); // > 3.5 in
   await expect(page.locator('#inspection li[data-rule="Height"]')).toHaveAttribute("data-ok", "false");
-
-  await setRange(page, "#ground-clearance", "0.0"); // < 3/8 in
-  await expect(page.locator('#inspection li[data-rule="Ground clearance"]')).toHaveAttribute(
-    "data-ok",
-    "false",
-  );
 
   await setRange(page, "#weight", "6.5"); // > 5.0 oz
   await expect(page.locator('#inspection li[data-rule="Weight"]')).toHaveAttribute("data-ok", "false");

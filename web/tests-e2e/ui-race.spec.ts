@@ -17,6 +17,8 @@ test("racing the default car animates to the finish line and shows the engine ti
   await expect(page.locator("#track-canvas")).toHaveAttribute("data-reached-finish", "true");
   await expect(page.locator("#track-canvas")).toHaveAttribute("data-banner", /finished/i);
   await expect(page.locator("#result-time")).toContainText(expected.toFixed(3));
+  // The live speed readout shows a real mph at the finish line.
+  expect(Number(await page.locator("#mph").textContent())).toBeGreaterThan(0);
 });
 
 test("racing the same design twice yields the same time (AC-R3)", async ({ page }) => {

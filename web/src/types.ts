@@ -12,8 +12,7 @@ export interface ControlState {
   body_width_in: number; // body width → frontal area → drag (also a legality rule)
   body_height_in: number; // body height → frontal area → drag (also a legality rule)
   body_length_in: number; // legality only (fit), not physics
-  ground_clearance_in: number; // legality only (clears the rail), not physics
-  alignment_rail: boolean; // rail-rider vs straight
+  steer_angle_deg: number; // alignment: 0° ping-pongs → ~3° rail-rider sweet spot → more scrubs
 }
 
 // One legality-inspection row (mirrors present.legality_report()).
@@ -66,21 +65,22 @@ export interface TrackInfo {
   total_length_m: number;
 }
 
-// A legal, finishing default car (PRD AC-C2): light wheels, slick axles, sleek wedge body,
-// rail-rider, weight at the limit, COM in the optimal rearward-but-stable zone.
+// A neutral starter car with EVERY slider parked at the middle of its range (per product
+// decision — no pre-optimized defaults, so the kid tunes every lever themselves). Each value
+// is the midpoint of the matching RANGES entry, snapped to the slider's step. Still legal and
+// finishing, just deliberately un-tuned.
 export const DEFAULT_CAR: ControlState = {
-  mass_oz: 5.0,
-  com_in: 0.85,
-  wheelbase_in: 4.375,
+  mass_oz: 4.0, // mid of 1.0–7.0
+  com_in: 1.3, // mid of 0.10–2.50
+  wheelbase_in: 4.25, // mid of 3.5–5.0
   wheels_count: 4,
-  wheel_mass_oz: 0.09,
-  axle_mu: 0.1,
-  body_cd: 0.2,
-  body_width_in: 1.75,
-  body_height_in: 2.5,
-  body_length_in: 7.0,
-  ground_clearance_in: 0.4,
-  alignment_rail: true,
+  wheel_mass_oz: 0.14, // mid of 0.07–0.20 (0.135 → 0.14 on the 0.01 step)
+  axle_mu: 0.23, // mid of 0.05–0.40 (0.225 → 0.23 on the 0.01 step)
+  body_cd: 0.5, // mid of 0.15–0.85
+  body_width_in: 2.0, // mid of 1.0–3.0
+  body_height_in: 2.3, // mid of 0.5–4.0 (2.25 → 2.3 on the 0.1 step)
+  body_length_in: 6.0, // mid of 4.0–8.0
+  steer_angle_deg: 5.0, // mid of 0–10
 };
 
 export const LEGAL_WEIGHT_OZ = 5.0;
@@ -99,5 +99,5 @@ export const RANGES = {
   body_width_in: { min: 1.0, max: 3.0, step: 0.05 },
   body_height_in: { min: 0.5, max: 4.0, step: 0.1 },
   body_length_in: { min: 4.0, max: 8.0, step: 0.25 },
-  ground_clearance_in: { min: 0.0, max: 1.0, step: 0.05 },
+  steer_angle_deg: { min: 0.0, max: 10.0, step: 0.25 },
 } as const;

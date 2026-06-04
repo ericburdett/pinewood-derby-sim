@@ -11,14 +11,14 @@ export interface CarArtSpec {
   noseFrac: number; // 0..1 nose height as a fraction of body height (sleek wedge → block)
   wheelR: number; // wheel radius
   wheelbasePx: number; // axle spacing
-  clearancePx: number; // ground clearance — gap under the chassis
   threeWheel: boolean; // one front wheel lifted
   spin: number; // wheel rotation (radians) — for the rolling animation
 }
 
-/** Body underside height above the ground, in px (shared by drawCar + the preview marker). */
+/** Body underside height above the ground, in px (shared by drawCar + the preview marker).
+ *  Sits just above the axle line so the wheels read below the chassis. */
 export function bodyBaseY(s: CarArtSpec): number {
-  return -(s.clearancePx + s.wheelR * 0.2);
+  return -(s.wheelR * 1.15);
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -37,7 +37,6 @@ export function carSpec(state: ControlState, pxPerIn: number, spin = 0): CarArtS
     noseFrac: lerp(0.26, 1.0, frac(state.body_cd, RANGES.body_cd)),
     wheelR: (0.42 + 0.16 * frac(state.wheel_mass_oz, RANGES.wheel_mass_oz)) * pxPerIn,
     wheelbasePx: state.wheelbase_in * pxPerIn,
-    clearancePx: state.ground_clearance_in * pxPerIn,
     threeWheel: state.wheels_count === 3,
     spin,
   };
@@ -49,7 +48,7 @@ function drawWheel(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: num
   if (dim) ctx.globalAlpha = 0.85;
   // Tire.
   ctx.fillStyle = "#0a1018";
-  ctx.strokeStyle = dim ? "#6b7a93" : "#38bdf8";
+  ctx.strokeStyle = dim ? "#6b7a93" : "#5aa6cf";
   ctx.lineWidth = Math.max(1.5, r * 0.18);
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
@@ -81,19 +80,19 @@ export function drawCar(ctx: CanvasRenderingContext2D, s: CarArtSpec): void {
   const bodyBackX = -s.lengthPx / 2;
   const bodyFrontX = s.lengthPx / 2;
   const wheelCY = -s.wheelR;
-  const bodyBase = bodyBaseY(s); // body underside rides at the ground-clearance height
+  const bodyBase = bodyBaseY(s); // body underside sits just above the axle line
   const tailTop = bodyBase - s.heightPx;
   const noseTop = bodyBase - s.heightPx * s.noseFrac;
 
   // Body — glowing wedge/block silhouette with a slate gradient fill.
   ctx.save();
-  ctx.shadowColor = "#38bdf8";
-  ctx.shadowBlur = 10;
+  ctx.shadowColor = "#5aa6cf";
+  ctx.shadowBlur = 6;
   const grad = ctx.createLinearGradient(0, tailTop, 0, bodyBase);
   grad.addColorStop(0, "#2a5f82");
   grad.addColorStop(1, "#0e2638");
   ctx.fillStyle = grad;
-  ctx.strokeStyle = "#5ec2ff";
+  ctx.strokeStyle = "#7fb8d8";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(bodyBackX, bodyBase);

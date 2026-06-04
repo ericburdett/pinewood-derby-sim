@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pinewood Derby + AI — Kickoff</title>
+<style>
+  :root {
+    --wood: #b5651d;
+    --wood-dark: #6e3b12;
+    --cream: #fdf6e3;
+    --red: #d7263d;
+    --ink: #1b1b1b;
+    --blue: #2b6cb0;
+    --green: #2f855a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    background: var(--ink);
+    color: var(--ink);
+    overflow: hidden;
+  }
+  .deck { height: 100vh; width: 100vw; position: relative; }
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 5vh 8vw;
+    text-align: center;
+    background: var(--cream);
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(181,101,29,0.08), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(43,108,176,0.08), transparent 40%);
+  }
+  .slide.active { display: flex; animation: fade .35s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+  h1 { font-size: clamp(2.2rem, 6vw, 4.5rem); color: var(--wood-dark); line-height: 1.05; margin-bottom: .4em; }
+  h2 { font-size: clamp(1.8rem, 4.5vw, 3.2rem); color: var(--wood-dark); margin-bottom: .5em; }
+  p, li { font-size: clamp(1.1rem, 2.6vw, 1.9rem); line-height: 1.5; max-width: 22ch; }
+  .wide p, .wide li { max-width: 34ch; }
+  ul { text-align: left; list-style: none; }
+  li { margin: .5em 0; padding-left: 1.6em; position: relative; }
+  li::before { content: "🏁"; position: absolute; left: 0; }
+  .sub { color: var(--wood); font-weight: bold; letter-spacing: .04em; text-transform: uppercase; font-size: clamp(.8rem,1.8vw,1.1rem); margin-bottom: 1.2em; }
+  .big { font-size: clamp(2.4rem, 7vw, 5rem); color: var(--red); font-weight: bold; }
+  .chip { display: inline-block; background: var(--wood-dark); color: var(--cream); padding: .15em .6em; border-radius: .4em; font-weight: bold; }
+  .chip.blue { background: var(--blue); }
+  .chip.green { background: var(--green); }
+  .chip.red { background: var(--red); }
+  .pred {
+    display: flex; flex-wrap: wrap; gap: .4em; justify-content: center; align-items: center;
+    font-size: clamp(1.4rem, 4vw, 2.8rem); margin-top: .4em;
+  }
+  .pred .word { background: #fff; border: 2px solid var(--wood); border-radius: .4em; padding: .1em .45em; }
+  .pred .next { background: var(--red); color: #fff; border-color: var(--red); }
+  .pred .q { color: var(--wood); }
+  .odds { display: flex; flex-direction: column; gap: .5em; margin-top: 1em; width: min(90%, 30rem); }
+  .odds .row { display: flex; align-items: center; gap: .6em; font-size: clamp(1rem,2.4vw,1.6rem); }
+  .odds .bar { height: 1.4em; background: var(--blue); border-radius: .3em; }
+  .odds .label { width: 8ch; text-align: right; font-weight: bold; }
+  .loop { display: flex; flex-wrap: wrap; gap: .5em; justify-content: center; margin-top: .8em; }
+  .loop .step { background: #fff; border: 3px solid var(--wood); border-radius: .8em; padding: .5em .9em; font-size: clamp(.95rem,2.2vw,1.4rem); font-weight: bold; }
+  .loop .arrow { font-size: clamp(1.2rem,3vw,2rem); color: var(--wood); align-self: center; }
+  .note { margin-top: 1.2em; font-size: clamp(.95rem,2.2vw,1.4rem); color: var(--wood-dark); font-style: italic; max-width: 30ch; }
+  .two { display: flex; gap: 2em; flex-wrap: wrap; justify-content: center; margin-top: .6em; }
+  .card { background: #fff; border: 3px solid var(--wood); border-radius: 1em; padding: 1em 1.4em; width: min(40vw, 22rem); }
+  .card h3 { color: var(--wood-dark); font-size: clamp(1.1rem,2.6vw,1.7rem); margin-bottom: .3em; }
+  .card p { font-size: clamp(.9rem,2vw,1.3rem); max-width: none; }
+  .demo-list li::before { content: "▶"; color: var(--red); }
+  .title-emoji { font-size: clamp(3rem, 10vw, 7rem); margin-bottom: .2em; }
+
+  /* chrome */
+  .progress { position: fixed; top: 0; left: 0; height: 6px; background: var(--red); transition: width .3s; z-index: 10; }
+  .counter { position: fixed; bottom: 14px; right: 18px; font-size: 14px; color: var(--wood-dark); background: rgba(255,255,255,.7); padding: 2px 10px; border-radius: 10px; z-index: 10; }
+  .hint { position: fixed; bottom: 14px; left: 18px; font-size: 13px; color: var(--wood); z-index: 10; }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="deck" id="deck">
+
+  <!-- 1: Title -->
+  <section class="slide active">
+    <div class="title-emoji">🏎️ 🤖</div>
+    <h1>Pinewood Derby<br>+ AI</h1>
+    <p class="big">How I built this app by <em>talking</em> to a computer</p>
+    <p class="note">Young Men Derby Kickoff · Tonight</p>
+  </section>
+
+  <!-- 2: The hook -->
+  <section class="slide">
+    <p class="sub">The big idea</p>
+    <h2>I didn't write most of this code myself.</h2>
+    <p class="wide">I described what I wanted, in plain English, and an AI <span class="chip">agent</span> wrote it, tested it, and fixed its own mistakes.</p>
+    <p class="note">Let's peek under the hood — then we'll build a new feature together, live.</p>
+  </section>
+
+  <!-- 3: What is an LLM -->
+  <section class="slide">
+    <p class="sub">Part 1 · How does the AI work?</p>
+    <h2>An LLM is a <span style="color:var(--red)">next-word predictor</span></h2>
+    <p class="wide">It's like the autocomplete on your phone keyboard — but trained on a huge chunk of the internet.</p>
+    <div class="pred">
+      <span class="word">The</span>
+      <span class="word">fastest</span>
+      <span class="word">pinewood</span>
+      <span class="word">car</span>
+      <span class="word">is</span>
+      <span class="q">→</span>
+      <span class="word next">heavy</span>
+    </div>
+  </section>
+
+  <!-- 4: probabilities -->
+  <section class="slide">
+    <p class="sub">Part 1 · How does the AI work?</p>
+    <h2>It guesses the <em>most likely</em> next word</h2>
+    <p class="wide">For "The fastest pinewood car is ___" it ranks every possible word:</p>
+    <div class="odds">
+      <div class="row"><span class="label">heavy</span><div class="bar" style="width:80%"></div><span>61%</span></div>
+      <div class="row"><span class="label">fast</span><div class="bar" style="width:40%"></div><span>22%</span></div>
+      <div class="row"><span class="label">red</span><div class="bar" style="width:14%"></div><span>9%</span></div>
+      <div class="row"><span class="label">banana</span><div class="bar" style="width:3%"></div><span>0.1%</span></div>
+    </div>
+    <p class="note">Pick a word, add it, then predict the next one. Repeat. That's it — one word at a time.</p>
+  </section>
+
+  <!-- 5: RLHF -->
+  <section class="slide">
+    <p class="sub">Part 1 · How does the AI work?</p>
+    <h2>Why does it sound <em>helpful</em>?</h2>
+    <p class="wide">Raw prediction just sounds like the internet. So humans rate thousands of answers — <span class="chip green">👍 good</span> vs <span class="chip red">👎 bad</span> — and the AI is re-trained to give answers people prefer.</p>
+    <p class="big" style="font-size:clamp(1.4rem,4vw,2.4rem)">This is called <span style="color:var(--blue)">RLHF</span></p>
+    <p class="note">Reinforcement Learning from Human Feedback. It learns to be helpful, honest, and polite — by copying what humans thumbs-up.</p>
+  </section>
+
+  <!-- 6: catch -->
+  <section class="slide">
+    <p class="sub">Part 1 · The catch</p>
+    <h2>It predicts words — it doesn't <em>"know"</em> things</h2>
+    <p class="wide">That's why it can sound confident and still be wrong. It's a brilliant guesser, not an oracle.</p>
+    <p class="note">Which is exactly why the next part matters...</p>
+  </section>
+
+  <!-- 7: What is an agent -->
+  <section class="slide">
+    <p class="sub">Part 2 · From chatbot to agent</p>
+    <h2>What's an <span style="color:var(--red)">agent</span>?</h2>
+    <p class="wide">A chatbot just <em>talks</em>. An agent can <em>act</em> — it's given <span class="chip blue">tools</span> and runs in a loop, deciding its own next step.</p>
+    <div class="loop">
+      <span class="step">🎯 Goal</span>
+      <span class="arrow">→</span>
+      <span class="step">🤔 Decide</span>
+      <span class="arrow">→</span>
+      <span class="step">🔧 Use a tool</span>
+      <span class="arrow">→</span>
+      <span class="step">👀 See result</span>
+      <span class="arrow">↺</span>
+    </div>
+    <p class="note">Loop until the job is done.</p>
+  </section>
+
+  <!-- 8: Claude Code -->
+  <section class="slide">
+    <p class="sub">Part 2 · From chatbot to agent</p>
+    <h2>Claude Code is an agent for <em>building software</em></h2>
+    <p class="wide">Its tools are a programmer's tools. It decides which to use, when:</p>
+    <div class="two">
+      <div class="card"><h3>📖 Read &amp; search</h3><p>Looks through the project's files to understand the code.</p></div>
+      <div class="card"><h3>✍️ Write code</h3><p>Creates and edits files to add features or fix bugs.</p></div>
+      <div class="card"><h3>▶️ Run commands</h3><p>Runs the tests and the app to check its own work.</p></div>
+      <div class="card"><h3>🔁 Fix &amp; repeat</h3><p>Sees errors, decides a fix, tries again — on its own.</p></div>
+    </div>
+  </section>
+
+  <!-- 9: the app -->
+  <section class="slide">
+    <p class="sub">Part 3 · The app we'll race in</p>
+    <h2>The Pinewood Derby Simulator</h2>
+    <ul class="wide">
+      <li>Design a car with sliders — weight, shape, wheels, axles</li>
+      <li>Real physics engine runs the race (friction, drag, gravity)</li>
+      <li>Watch it race and see <em>where your speed went</em></li>
+      <li>A "Learn" tab teaches what actually makes cars fast</li>
+    </ul>
+    <p class="note">Cool part: the physics is written in Python, running <em>inside your web browser</em>. The AI wired all that together.</p>
+  </section>
+
+  <!-- 10: what to try -->
+  <section class="slide">
+    <p class="sub">Part 3 · Let's play</p>
+    <h2>Things to try right now 👇</h2>
+    <ul class="wide demo-list">
+      <li>Make the <strong>heaviest legal</strong> car — does heavier win?</li>
+      <li>Put the weight in the <strong>back</strong> vs the front</li>
+      <li>Make a car so tall it <strong>tips over</strong></li>
+      <li>Find the combo with the <strong>fastest time</strong></li>
+    </ul>
+    <p class="note">Same lessons apply to the real cars we'll build in a few weeks.</p>
+  </section>
+
+  <!-- 11: live build -->
+  <section class="slide">
+    <p class="sub">Part 4 · The main event</p>
+    <h2>Let's build a feature — <em>live</em></h2>
+    <p class="big" style="font-size:clamp(1.8rem,5vw,3rem)">🏆 A Local Scoreboard</p>
+    <p class="wide">We'll ask Claude Code to save every race and show a leaderboard of fastest cars. We watch it read the code, write it, and test it — in real time.</p>
+    <p class="note">Predict out loud: how many files will it need to change?</p>
+  </section>
+
+  <!-- 12: takeaways -->
+  <section class="slide">
+    <p class="sub">Wrap up</p>
+    <h2>What I hope you take away</h2>
+    <ul class="wide">
+      <li>AI is a <strong>next-word predictor</strong> shaped by human feedback</li>
+      <li>An <strong>agent</strong> turns that into something that takes action</li>
+      <li>You still need to know <strong>what you want</strong> and <strong>check the work</strong></li>
+      <li>Now go build a fast car. 🏁</li>
+    </ul>
+  </section>
+
+</div>
+
+<div class="counter" id="counter">1 / 12</div>
+<div class="hint">← → or Space to navigate · F for fullscreen</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  let i = 0;
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    document.getElementById('counter').textContent = (i + 1) + ' / ' + slides.length;
+    document.getElementById('progress').style.width = ((i + 1) / slides.length * 100) + '%';
+  }
+  function next() { show(i + 1); }
+  function prev() { show(i - 1); }
+  document.addEventListener('keydown', (e) => {
+    if (['ArrowRight', ' ', 'PageDown', 'ArrowDown'].includes(e.key)) { e.preventDefault(); next(); }
+    else if (['ArrowLeft', 'PageUp', 'ArrowUp'].includes(e.key)) { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key.toLowerCase() === 'f') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+  document.getElementById('deck').addEventListener('click', (e) => {
+    // click right half = next, left half = prev
+    if (e.clientX > window.innerWidth / 2) next(); else prev();
+  });
+  show(0);
+</script>
+</body>
+</html>

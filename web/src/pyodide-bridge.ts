@@ -25,7 +25,7 @@ import sys
 if "/engine" not in sys.path:
     sys.path.insert(0, "/engine")
 
-from pinewood_derby.car import Alignment, Axle, BodyShape, CarDesign, Wheels
+from pinewood_derby.car import Axle, BodyShape, CarDesign, Wheels
 from pinewood_derby.engine import simulate
 from pinewood_derby.present import from_dict, legality_report, present, to_dict, to_json
 from pinewood_derby.track import STANDARD_TRACK
@@ -52,7 +52,6 @@ def _car_from_state(state):
     frontal_area = float(state["body_width_in"]) * float(state["body_height_in"]) * IN2_TO_M2
     body = BodyShape(drag_coefficient=float(state["body_cd"]), frontal_area=frontal_area)
     axle = Axle(friction_coefficient=float(state["axle_mu"]))
-    alignment = Alignment.RAIL_RIDER if state["alignment_rail"] else Alignment.STRAIGHT
     return CarDesign(
         mass=Mass.from_ounces(float(state["mass_oz"])),
         com_ahead_of_rear_axle=Length.from_inches(float(state["com_in"])),
@@ -60,7 +59,7 @@ def _car_from_state(state):
         wheels=wheels,
         body=body,
         axle=axle,
-        alignment=alignment,
+        steer_angle_deg=float(state["steer_angle_deg"]),
     )
 
 
@@ -97,7 +96,6 @@ def legality(state_json):
         width_in=float(s["body_width_in"]),
         height_in=float(s["body_height_in"]),
         length_in=float(s["body_length_in"]),
-        ground_clearance_in=float(s["ground_clearance_in"]),
     ))
 
 

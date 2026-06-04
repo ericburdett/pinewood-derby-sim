@@ -29,6 +29,12 @@ function bodyWord(cd: number): string {
   return "Blocky";
 }
 
+// Steer angle → just the raw value. No "rail-rider / ping-pongs / over-steered" descriptor: the
+// Race tab is a test, so we don't hint at the sweet spot while a kid plays with the slider.
+export function steerWord(deg: number): string {
+  return `${deg.toFixed(1)}°`;
+}
+
 export class Controls {
   private readonly weight = el<HTMLInputElement>("weight");
   private readonly weightDisplay = el<HTMLOutputElement>("weight-display");
@@ -49,9 +55,8 @@ export class Controls {
   private readonly bodyHeightDisplay = el<HTMLOutputElement>("body-height-display");
   private readonly bodyLength = el<HTMLInputElement>("body-length");
   private readonly bodyLengthDisplay = el<HTMLOutputElement>("body-length-display");
-  private readonly groundClearance = el<HTMLInputElement>("ground-clearance");
-  private readonly groundClearanceDisplay = el<HTMLOutputElement>("ground-clearance-display");
-  private readonly alignmentRail = el<HTMLInputElement>("alignment-rail");
+  private readonly steerAngle = el<HTMLInputElement>("steer-angle");
+  private readonly steerAngleDisplay = el<HTMLOutputElement>("steer-angle-display");
   private readonly form = el<HTMLFormElement>("builder");
 
   /** Wire live displays. `onInput` fires whenever any control changes. */
@@ -80,8 +85,7 @@ export class Controls {
       body_width_in: Number(this.bodyWidth.value),
       body_height_in: Number(this.bodyHeight.value),
       body_length_in: Number(this.bodyLength.value),
-      ground_clearance_in: Number(this.groundClearance.value),
-      alignment_rail: this.alignmentRail.checked,
+      steer_angle_deg: Number(this.steerAngle.value),
     };
   }
 
@@ -100,8 +104,7 @@ export class Controls {
     this.bodyWidth.value = String(state.body_width_in);
     this.bodyHeight.value = String(state.body_height_in);
     this.bodyLength.value = String(state.body_length_in);
-    this.groundClearance.value = String(state.ground_clearance_in);
-    this.alignmentRail.checked = state.alignment_rail;
+    this.steerAngle.value = String(state.steer_angle_deg);
     this.syncDisplays();
   }
 
@@ -132,7 +135,7 @@ export class Controls {
     this.bodyWidthDisplay.textContent = Number(this.bodyWidth.value).toFixed(2);
     this.bodyHeightDisplay.textContent = Number(this.bodyHeight.value).toFixed(1);
     this.bodyLengthDisplay.textContent = Number(this.bodyLength.value).toFixed(2);
-    this.groundClearanceDisplay.textContent = Number(this.groundClearance.value).toFixed(2);
+    this.steerAngleDisplay.textContent = steerWord(Number(this.steerAngle.value));
     // Icon + text (never color-only) — AC-A2.
     if (mass <= LEGAL_WEIGHT_OZ + 1e-9) {
       this.weightLegal.textContent = `✓ Legal — within the ${LEGAL_WEIGHT_OZ.toFixed(1)} oz limit`;

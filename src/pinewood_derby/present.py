@@ -310,7 +310,11 @@ def _optimal_levers(car: CarDesign) -> frozenset[str]:
         optimal.add("wheels")
     if car.body.drag_coefficient <= _BODY_OPTIMAL_CD:
         optimal.add("air")
-    if car.alignment is _car.Alignment.RAIL_RIDER:
+    # Alignment is dialed in when the steer sits in the rail-rider sweet zone: at/just past
+    # the pin angle, where the car rides one rail with minimal scrub. Too little steer (it
+    # ping-pongs) or too much (it scrubs the rail) is a genuinely fixable loss.
+    steer = car.effective_steer_deg
+    if _car.RAIL_RIDER_STEER_DEG <= steer <= _car.RAIL_RIDER_STEER_DEG + 1.0:
         optimal.add("rails")
     return frozenset(optimal)
 
@@ -692,6 +696,7 @@ def to_dict(car: CarDesign) -> dict[str, object]:
             },
             "axle": {"friction_coefficient": car.axle.friction_coefficient},
             "alignment": car.alignment.value,
+            "steer_angle_deg": car.steer_angle_deg,
         },
     }
 
@@ -760,6 +765,18 @@ def from_dict(data: dict[str, object]) -> CarDesign:
         )
         axle = _car.Axle(friction_coefficient=_num(axle_d, "friction_coefficient"))
         alignment = _car.Alignment(_str(design, "alignment"))
+        # Optional (back-compatible): pre-steer garages omit it → None → derived from the
+        # alignment enum. ``null`` is also accepted and means the same.
+        steer_obj = design.get("steer_angle_deg")
+        steer_angle_deg: float | None
+        if steer_obj is None:
+            steer_angle_deg = None
+        elif isinstance(steer_obj, bool) or not isinstance(steer_obj, (int, float)):
+            raise ValueError(
+                f"garage field 'steer_angle_deg' must be a number or null, got {steer_obj!r}"
+            )
+        else:
+            steer_angle_deg = float(steer_obj)
         return CarDesign(
             mass=_units.Mass(_num(design, "mass_kg")),
             com_ahead_of_rear_axle=_units.Length(_num(design, "com_ahead_of_rear_axle_m")),
@@ -768,6 +785,7 @@ def from_dict(data: dict[str, object]) -> CarDesign:
             body=body,
             axle=axle,
             alignment=alignment,
+            steer_angle_deg=steer_angle_deg,
         )
     except KeyError as exc:
         raise ValueError(f"malformed garage entry: missing key {exc}") from exc
@@ -784,7 +802,6 @@ LEGAL_LIMITS: dict[str, float] = {
     "width_in_max": 2.75,
     "length_in_max": 7.0,
     "height_in_max": 3.5,
-    "ground_clearance_in_min": 0.375,
 }
 
 _EPS = 1e-9
@@ -800,7 +817,6 @@ def legality_report(
     width_in: float,
     height_in: float,
     length_in: float,
-    ground_clearance_in: float,
 ) -> list[dict[str, object]]:
     """A per-rule legality checklist for the inspection panel. Each entry carries the rule
     name, whether it passes, the car's value, and the plain-language requirement. Pure and
@@ -815,6 +831,4 @@ def legality_report(
               f"{length_in:.2f} in", "at most 7.0 in long"),
         _rule("Height", height_in <= LEGAL_LIMITS["height_in_max"] + _EPS,
               f"{height_in:.2f} in", "at most 3.5 in tall"),
-        _rule("Ground clearance", ground_clearance_in >= LEGAL_LIMITS["ground_clearance_in_min"] - _EPS,
-              f"{ground_clearance_in:.2f} in", "at least 3/8 in to clear the rail"),
     ]

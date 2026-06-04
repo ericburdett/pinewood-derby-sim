@@ -1,8 +1,9 @@
 // WI10 — render the kid-facing RaceView: headline, time (finishers only — AC-R2 shows no
-// numeric time for a non-finish), the ranked "where did your speed go?" breakdown
-// (largest-first, AC-X1), the dominant-factor "why" (AC-X2), and priority-ordered tips
-// (AC-X4). Every bar carries a text label + percentage, never color alone (AC-A2). It only
-// renders what present.py emits — no jargon is introduced here (AC-X3).
+// numeric time for a non-finish), and the ranked "where did your speed go?" breakdown
+// (largest-first, AC-X1). Every bar carries a text label + percentage, never color alone
+// (AC-A2). No jargon (AC-X3). The Race tab is a TEST: the engine still computes the dominant-
+// factor "why" and coaching tips, but the UI intentionally does NOT display them (feature
+// 0005) — the Learn tab teaches the principles instead, so the player isn't handed the answer.
 import type { RaceView } from "./types";
 
 function el<T extends HTMLElement>(id: string): T {
@@ -57,27 +58,5 @@ export function renderResult(view: RaceView): void {
     }
   } else {
     wrap.hidden = true;
-  }
-
-  const why = el<HTMLParagraphElement>("why");
-  if (view.why) {
-    why.textContent = view.why;
-    why.hidden = false;
-  } else {
-    why.hidden = true;
-  }
-
-  const tipsWrap = el<HTMLDivElement>("tips-wrap");
-  const tips = el<HTMLUListElement>("tips");
-  tips.replaceChildren();
-  if (view.tips.length > 0) {
-    tipsWrap.hidden = false;
-    for (const tip of view.tips) {
-      const li = document.createElement("li");
-      li.textContent = tip;
-      tips.appendChild(li);
-    }
-  } else {
-    tipsWrap.hidden = true;
   }
 }

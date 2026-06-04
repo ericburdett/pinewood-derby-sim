@@ -10,7 +10,7 @@ test("a legal, finishing default car is loaded and immediately raceable (AC-C2)"
   page,
 }) => {
   await gotoReady(page);
-  await expect(page.locator("#weight-display")).toHaveText("5.0");
+  await expect(page.locator("#weight-display")).toHaveText("4.0"); // mid-range, legal sub-limit starter
   await expect(page.locator("#weight-legal")).toContainText("Legal");
   await expect(page.locator("#race")).toBeEnabled();
 
@@ -44,7 +44,7 @@ test("extreme but in-range inputs never throw a stack trace and still race (AC-C
   await setRange(page, "#wheel-mass", "0.20");
   await setRange(page, "#axle-mu", "0.40");
   await setRange(page, "#body-cd", "0.85");
-  await page.locator("#alignment-rail").uncheck();
+  await setRange(page, "#steer-angle", "0"); // worst alignment: no steer → ping-pongs
 
   await raceAndWait(page);
   await expect(page.locator("#control-error")).toBeHidden();

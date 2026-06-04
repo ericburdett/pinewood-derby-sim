@@ -25,7 +25,7 @@ from __future__ import annotations
 import math
 import random
 
-from .car import Alignment, CarDesign
+from .car import RAIL_RIDER_STEER_DEG, Alignment, CarDesign
 from .result import (
     EnergyLedger,
     NormalForces,
@@ -80,9 +80,20 @@ _WEIGHT_LIMIT_TOL_KG = 1e-6  # 0.001 g — the precision AC-W2's gram figure is 
 # short. The duty scaling lives in the integration loop (not in ``_rail_force``) so
 # the per-step spike ``_rail_force`` returns stays the raw in-band draw the spec and
 # AC-AL2 pin.
-_RAIL_F_RAIL_RIDER = 0.06          # constant rail force for a rail-riding car [N]
+_RAIL_F_RAIL_RIDER = 0.06          # constant rail force at the rail-rider sweet spot [N]
 _RAIL_PINGPONG_RANGE = (1.5, 3.0)  # U(min, max) ping-pong spike for a straight car [N]
 _RAIL_CONTACT_DUTY = 0.034         # fraction of travel a straight car is rail-in-contact
+
+# ── Continuous steer-angle rail model (physics-spec §3.3, extended) ──────────────────────
+# The alignment lever is a smooth valley in steer angle, not an on/off. Below the "pin" angle
+# the car still ping-pongs, fading linearly to zero contact as the steer pins it to one rail;
+# at/above the pin it rides one rail (RNG-free) with a small scrub force that grows with
+# over-steer. The endpoints reproduce the legacy enum EXACTLY: at 0° the applied loss is the
+# old STRAIGHT (spike × duty, RNG consumed), and at the sweet spot it is the old RAIL_RIDER
+# constant (RNG-free) — so every existing alignment/energy test is unchanged. The pin angle is
+# the sweet spot itself, and the scrub gain is a tuned calibration (not a spec-fixed formula).
+_STEER_PIN_DEG = RAIL_RIDER_STEER_DEG  # at/above this the car is pinned to one rail (no ping-pong)
+_STEER_SCRUB_GAIN = 0.0012             # over-steer rail-scrub growth: F = base + gain·(θ−pin)² [N/deg²]
 
 # ── Stability: a GRADED tippy zone, not a sharp cliff (physics-spec §4.2; graded placement) ──
 # The front-axle load fraction N_f/(M·g) = d_COM/L (AC-P4) falls SMOOTHLY toward zero as the
@@ -191,17 +202,17 @@ _RAIL_MASS_EXPONENT = 1.0  # rail tracking loss scales as (M_ref / M)**q — inv
 # response the earlier sub-linear curve gave.
 #
 # What keeps aero the SMALLEST lever (profile/AC-ED1: weight & friction dominate, aero is
-# minor) is the small fraction (0.06) holding the ABSOLUTE drag in the right regime — NOT a
-# sub-linear curve. Verified empirically when 0008 restored linear scaling: the full WI12
-# priority-order + WI8 aero + WI12-ADV adversarial suites still pass — the BLOCK→WEDGE body
-# swap stays a smaller race-time win than the wheels lever across PRD A5's band, and aero is
-# never the dominant surfaced loss even at a legal-maximum body (test_present_legality_wi08).
-# C_d enters as a pure multiplier (drag still rises with C_d and flat length — AC-A1/AC-A2).
-# The fraction is a tunable realism parameter (PRD A5), not a spec-fixed constant.
+# minor) is the small fraction (0.06) holding the ABSOLUTE drag in the right regime. The
+# BLOCK→WEDGE body swap stays a smaller race-time win than the wheels lever across PRD A5's
+# band, and aero is never the dominant surfaced loss even at a legal-maximum body
+# (test_present_legality_wi08). C_d enters as a pure multiplier (drag rises with C_d and flat
+# length — AC-A1/AC-A2). The fraction is a tunable realism parameter (PRD A5), not spec-fixed.
 #
-# (History: drag was previously damped further by a sub-linear exponent of 0.5; 0008 set it
-# to 1.0 after confirming the 0.06 fraction alone preserves the priority order, so body size
-# is now physically responsive — real linear-in-area drag.)
+# NOTE (feature 0005 / Mark Rober reconciliation): raising this so aero "matters more" makes
+# aero overtake the (modest, area-independent) WHEELS lever at chunky legal-max bodies — and
+# Rober ALSO ranks aero BELOW wheels. Making aero a real lever while keeping it under wheels
+# needs a COORDINATED retune (also strengthen the wheels lever), so the single-knob boost was
+# reverted to 0.06 pending that decision.
 _DRAG_EFFECTIVE_AREA_FRACTION = 0.06
 _DRAG_AREA_REFERENCE = 0.0028  # m² — PRD A5 documented default body cross-section (A_ref)
 _DRAG_AREA_EXPONENT = 1.0      # linear in frontal area (real physics, F_drag ∝ A); feature 0008
@@ -380,23 +391,28 @@ def simulate(
         # the friction lever (μ) alone — the placement lever now rides the rail force
         # below, keeping the two physically distinct effects independent (AC-ED1).
         f_axle = axle_factor * f_normal
-        # Per-step rail force (spec §3.3 / §4): RAIL_RIDER's constant, or a STRAIGHT
-        # car's raw ping-pong spike drawn in the [1.5, 3.0] N band (AC-AL2). The STRAIGHT
-        # car is only rail-in-contact for a fraction of its travel, so the *applied*
-        # resistive force is that spike weighted by the contact-duty fraction (the
-        # continuous-equivalent of intermittent wall strikes); RAIL_RIDER glides
-        # continuously, so its constant force is applied as-is. Both are then weighted by
-        # the front-load ``rail_tracking_factor`` (1 + k·d_COM/L): a rear-biased COM
-        # unloads the steering wheels, tracks the rail more cleanly, and loses less to
-        # rail contact (spec §4, AC-P1/AC-P2) — a smaller d_COM gives a smaller factor
-        # and a faster car. Scaling here (not inside ``_rail_force``) keeps the reported
-        # per-step spike the raw in-band draw AC-AL2 pins.
-        rail_spike = _rail_force(car.alignment, rng, velocity=velocity)
-        f_rail = rail_tracking_factor * (
-            rail_spike * _RAIL_CONTACT_DUTY
-            if car.alignment is Alignment.STRAIGHT
-            else rail_spike
-        )
+        # Per-step rail force as a smooth function of steer angle (spec §3.3 / §4, extended).
+        # Under-steered (θ < pin): the car still ping-pongs — a raw spike drawn in the
+        # [1.5, 3.0] N band (AC-AL2) applied with a contact duty that fades to zero as the
+        # steer pins the car to one rail, plus the steady single-rail force ramping in. At
+        # θ = 0 this is exactly the legacy STRAIGHT loss (spike × duty, one RNG draw/step).
+        # Pinned (θ ≥ pin): no ping-pong (RNG-free) — the sweet-spot minimum plus a scrub
+        # penalty that grows with over-steer; at θ = sweet spot it is exactly the legacy
+        # RAIL_RIDER constant. All then weighted by the front-load ``rail_tracking_factor``
+        # (a rear-biased COM unloads the steering wheels and tracks more cleanly — spec §4,
+        # AC-P1/AC-P2). Scaling here (not inside ``_rail_force``) keeps the reported per-step
+        # spike the raw in-band draw AC-AL2 pins.
+        steer_deg = car.effective_steer_deg
+        if steer_deg < _STEER_PIN_DEG:
+            pin_frac = steer_deg / _STEER_PIN_DEG  # 0 at no-steer → 1 at the pin point
+            rail_spike = _rail_force(Alignment.STRAIGHT, rng, velocity=velocity)
+            rail_magnitude = (
+                rail_spike * _RAIL_CONTACT_DUTY * (1.0 - pin_frac)
+                + _RAIL_F_RAIL_RIDER * pin_frac
+            )
+        else:
+            rail_magnitude = _scrub_force(steer_deg)
+        f_rail = rail_tracking_factor * rail_magnitude
 
         f_net = f_gravity - (f_drag + f_axle + f_rail)
         acceleration = f_net / effective_inertia
@@ -588,6 +604,16 @@ def _rail_force(
     if velocity <= 0.0:
         return 0.0
     return spike
+
+
+def _scrub_force(steer_deg: float) -> float:
+    """Pinned-rail force (steer ≥ the pin angle): the rail-rider sweet-spot minimum plus a
+    scrub penalty that grows quadratically as over-steer drags the steered wheel against the
+    rail (physics-spec §3.3, extended). RNG-free. At ``steer_deg == _STEER_PIN_DEG`` this is
+    exactly ``_RAIL_F_RAIL_RIDER`` — the legacy RAIL_RIDER constant — so a rail-rider car's
+    result is byte-identical to before."""
+    over = max(0.0, steer_deg - _STEER_PIN_DEG)
+    return _RAIL_F_RAIL_RIDER + _STEER_SCRUB_GAIN * over * over
 
 
 def _downsample(points: list[TrajectoryPoint]) -> tuple[TrajectoryPoint, ...]:

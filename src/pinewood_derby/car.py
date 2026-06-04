@@ -43,6 +43,20 @@ class Alignment(enum.Enum):
     RAIL_RIDER = "rail_rider"    # constant F_rail = 0.05 N
 
 
+# Continuous steer-angle alignment (physics-spec §3.3, extended to a smooth lever). A real
+# racer "steers" the front of the car a few degrees so it pins against ONE guide rail:
+#   0°            → no intentional steer; the car wanders and ping-pongs between both rails
+#                   (the most energy lost) — equivalent to ``Alignment.STRAIGHT``.
+#   ~3° (sweet)   → the car rides one rail smoothly with minimal, steady drag — the rail-rider
+#                   "sweet spot", equivalent to ``Alignment.RAIL_RIDER``.
+#   well past 3°  → the steered wheel scrubs the rail and bleeds speed again.
+# The two legacy enum modes are just the endpoints of this axis; the engine drives off
+# ``CarDesign.effective_steer_deg``.
+STRAIGHT_STEER_DEG = 0.0     # no steer → ping-pong (≡ Alignment.STRAIGHT)
+RAIL_RIDER_STEER_DEG = 3.0   # the rail-rider sweet spot (≡ Alignment.RAIL_RIDER)
+MAX_STEER_DEG = 10.0         # upper bound of a usefully-tunable steer (the UI slider's max)
+
+
 @dataclass(frozen=True)
 class Wheels:
     """The car's wheels (physics-spec §2.1/§2.2).
@@ -168,7 +182,11 @@ class CarDesign:
     wheels: Wheels
     body: BodyShape
     axle: Axle
-    alignment: Alignment
+    alignment: Alignment = Alignment.RAIL_RIDER
+    # Continuous steer angle (degrees). When given it drives the rail model directly; when
+    # ``None`` the engine falls back to the ``alignment`` enum, so legacy call sites that
+    # pass only ``alignment`` are unchanged. See ``effective_steer_deg``.
+    steer_angle_deg: float | None = None
 
     def __post_init__(self) -> None:
         m = self.mass.kg
@@ -189,3 +207,20 @@ class CarDesign:
                 f"wheels mass (count_touching * wheel_mass = {wheels_mass} kg) must be "
                 f"< total mass ({m} kg) to leave a positive chassis mass"
             )
+        if self.steer_angle_deg is not None:
+            steer = self.steer_angle_deg
+            if not math.isfinite(steer) or steer < 0.0:
+                raise ValueError(
+                    f"steer_angle_deg must be a finite >= 0 (degrees), got {steer}"
+                )
+
+    @property
+    def effective_steer_deg(self) -> float:
+        """The steer angle the engine actually uses. An explicit ``steer_angle_deg`` wins;
+        otherwise it is derived from the legacy ``alignment`` enum (STRAIGHT → 0°,
+        RAIL_RIDER → the sweet spot), so enum-only call sites behave exactly as before."""
+        if self.steer_angle_deg is not None:
+            return self.steer_angle_deg
+        if self.alignment is Alignment.STRAIGHT:
+            return STRAIGHT_STEER_DEG
+        return RAIL_RIDER_STEER_DEG

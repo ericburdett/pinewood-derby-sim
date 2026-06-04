@@ -18,6 +18,7 @@ export async function setRange(page: Page, selector: string, value: string): Pro
 
 /** Press Race and wait for the animation (or its reduced-motion end-state) to settle. */
 export async function raceAndWait(page: Page): Promise<void> {
+  // The Race button lives in the always-visible car box, so it's always clickable.
   await page.locator("#race").click();
   await expect(page.locator("#track-canvas")).toHaveAttribute("data-anim-done", "true", {
     timeout: 30_000,

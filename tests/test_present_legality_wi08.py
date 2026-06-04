@@ -4,7 +4,7 @@ Two things this feature touches that need pinning:
 
 - ``legality_report`` (pure): the inspection checklist used by the UI — weight (the one
   universal rule) plus the typical-but-league-dependent dimensional limits (width, length,
-  height, ground clearance).
+  height).
 - The drag physics now feeds on REAL body dimensions (frontal area = width × height) with
   real linear-in-area drag. The small effective-area FRACTION keeps aerodynamics the
   SMALLEST lever (AC-ED1); these tests re-prove that invariant at the LEGAL-MAXIMUM body
@@ -23,7 +23,7 @@ from pinewood_derby.track import STANDARD_TRACK
 from pinewood_derby.units import Length, Mass
 
 IN2_TO_M2 = 0.0254**2
-LEGAL = {"mass_oz": 5.0, "width_in": 1.75, "height_in": 2.5, "length_in": 7.0, "ground_clearance_in": 0.40}
+LEGAL = {"mass_oz": 5.0, "width_in": 1.75, "height_in": 2.5, "length_in": 7.0}
 
 
 def _report(**overrides: float) -> list[dict[str, object]]:
@@ -55,7 +55,6 @@ def test_report_entries_carry_rule_value_and_requirement() -> None:
         ({"width_in": 3.0}, "Width"),
         ({"length_in": 8.0}, "Length"),
         ({"height_in": 4.0}, "Height"),
-        ({"ground_clearance_in": 0.2}, "Ground clearance"),
     ],
 )
 def test_each_violation_fails_only_its_own_rule(override: dict[str, float], failing_rule: str) -> None:
@@ -68,7 +67,7 @@ def test_each_violation_fails_only_its_own_rule(override: dict[str, float], fail
 
 def test_values_exactly_at_the_limit_are_legal() -> None:
     flags = _by_rule(
-        _report(mass_oz=5.0, width_in=2.75, length_in=7.0, height_in=3.5, ground_clearance_in=0.375)
+        _report(mass_oz=5.0, width_in=2.75, length_in=7.0, height_in=3.5)
     )
     assert all(flags.values()), f"boundary values must be legal, got {flags}"
 

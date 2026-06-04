@@ -125,8 +125,31 @@ When a car is poorly aligned, it bounces off the center guide rail.
 - **Rail Rider alignment:** generates a constant, minimal friction value (`F_rail = 0.05 N`)
   because one wheel rides smoothly along the rail.
 
+#### 3.3a Continuous steer angle (graded model)
+
+Real alignment is a **tunable steer angle**, not an on/off — racers cant the front a few degrees
+so the car pins against **one** rail. The two modes above are the endpoints of a smooth *valley*
+in steer angle `θ` (degrees), and the engine drives `F_rail` off `θ` (`CarDesign.effective_steer_deg`):
+
+- **`θ = 0°` (no steer):** the car wanders and ping-pongs — the Straight case above (seeded
+  spike × contact duty). Most rail loss.
+- **`θ ≈ 3°` (the rail-rider *sweet spot*):** the car is pinned to one rail and rides it with a
+  small, steady, **RNG-free** force — the Rail Rider constant. Least rail loss. As `θ` rises from
+  0° to the sweet spot, the ping-pong contact duty fades **linearly to zero** (the car stops
+  bouncing) while a steady single-rail force ramps in.
+- **`θ` well past the sweet spot:** the steered wheel **scrubs** the rail; loss grows
+  quadratically (`F_rail = base + k·(θ − θ_sweet)²`), so the car slows again but still finishes —
+  a graded slowdown, not a DNF.
+
+The endpoints reproduce the legacy enum **exactly** (`θ = 0°` ≡ Straight; `θ = θ_sweet` ≡ Rail
+Rider, bit-for-bit), so this is a faithful *extension*, not a re-definition. The scrub gain and
+sweet-spot angle are tuned calibration parameters (not spec-fixed formulas). Educationally it
+teaches the real lesson: **a little steer is fastest; none and too much are both slower.**
+
 > **Determinism note (engine convention):** any randomness (e.g. ping-ponging) must be **seeded**
-> so a given input always produces an identical result. See `profile.md` conventions.
+> so a given input always produces an identical result. See `profile.md` conventions. An
+> under-steered car (`θ` below the sweet spot) consumes the seeded RNG; a pinned car
+> (`θ ≥ θ_sweet`) is RNG-free and seed-independent.
 
 ---
 

@@ -43,7 +43,7 @@ test.describe("non-color signals + responsive", () => {
     await page.setViewportSize({ width: 1024, height: 800 });
     await gotoReady(page);
     await expect(page.locator("#builder")).toBeVisible();
-    await expect(page.locator("#track-canvas")).toBeVisible();
+    await expect(page.locator("#car-preview")).toBeVisible(); // car + track boxes both show on load
     await expect(page.locator("#race")).toBeVisible();
     await setRange(page, "#weight", "5.0"); // controls remain operable at this width
     await expect(page.locator("#weight-display")).toHaveText("5.0");

@@ -13,52 +13,113 @@
         <h1>Derby&nbsp;Sim</h1>
         <p id="status" class="status" role="status" aria-live="polite">Warming up the engine…</p>
       </div>
-      <button id="race" type="submit" form="builder" class="race-btn" disabled>
-        Race <span aria-hidden="true">▶</span>
-      </button>
+      <nav class="tabs" role="tablist" aria-label="Views">
+        <button id="tab-race" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="app">🏁 Race</button>
+        <button id="tab-learn" class="tab" type="button" role="tab" aria-selected="false" aria-controls="learn">📚 Learn</button>
+      </nav>
     </header>
 
-    <main id="app" class="layout" hidden>
-      <div class="stage">
-      <!-- ── Live car preview (updates as you tune; WI08 visual) ─────────────── -->
-      <section class="panel preview" aria-labelledby="preview-h">
-        <h2 id="preview-h">Your car</h2>
-        <canvas id="car-preview" width="600" height="280" data-testid="car-preview"
-                role="img" aria-label="Live preview of your car design"></canvas>
-        <p id="preview-summary" class="preview-summary" data-testid="preview-summary"></p>
-      </section>
+    <main class="main">
+    <div id="app" class="layout" hidden>
+      <!-- Left column: the car, the race below it, and telemetry below that (after a race).
+           This column stays in view; the configuration column (right) scrolls independently. -->
+      <div id="stage" class="stage" data-raced="false">
+        <!-- ── Your car: live preview + Save/Load + Race, all in one box (WI08 visual) ───── -->
+        <section class="panel preview" aria-labelledby="preview-h">
+          <!-- Save / Load this car — open the garage modal (feature 0005). -->
+          <div class="car-actions">
+            <button id="open-save" type="button" class="chip">💾 Save</button>
+            <button id="open-load" type="button" class="chip">📂 Load</button>
+          </div>
+          <h2 id="preview-h">Your car</h2>
+          <canvas id="car-preview" width="600" height="240" data-testid="car-preview"
+                  role="img" aria-label="Live preview of your car design"></canvas>
+          <div class="pane-foot">
+            <button id="race" type="submit" form="builder" class="race-btn in-car" disabled>
+              Race <span aria-hidden="true">▶</span>
+            </button>
+          </div>
+        </section>
 
-      <!-- ── Track + animation (WI09 / WI11 / AC-R1, AC-R2, AC-R4) ────────────── -->
-      <section class="panel track" aria-labelledby="track-h">
-        <h2 id="track-h">The race</h2>
-        <canvas id="track-canvas" width="600" height="280" data-testid="track-canvas"
-                role="img" aria-label="Side view of the derby track"></canvas>
-        <p class="clock">Time <output id="clock" data-testid="clock">—</output></p>
-      </section>
+        <!-- ── The race: track + animation, always visible below the car (WI09/WI11) ─────── -->
+        <section class="panel track" aria-labelledby="track-h">
+          <h2 id="track-h">The race</h2>
+          <canvas id="track-canvas" width="600" height="240" data-testid="track-canvas"
+                  role="img" aria-label="Side view of the derby track"></canvas>
+          <div class="pane-foot race-readout">
+            <p class="clock">Time <output id="clock" data-testid="clock">—</output></p>
+            <p class="speedo">Speed <output id="mph" data-testid="mph">0.0</output> mph</p>
+          </div>
+        </section>
 
-      </div><!-- /.stage -->
+        <!-- ── Telemetry: appears below the race box once a race finishes ─────────────────── -->
+        <section id="result" class="panel result-box" aria-labelledby="result-h" aria-live="polite">
+          <h2 id="result-h">Telemetry</h2>
+          <p id="result-headline" class="headline" data-testid="result-headline">
+            Hit <strong>Race ▶</strong> to run your car
+          </p>
+          <p id="result-time" class="time" data-testid="result-time" hidden></p>
+          <div id="breakdown-wrap" hidden>
+            <h3>Where did your speed go?</h3>
+            <ul id="breakdown" class="breakdown" data-testid="breakdown"></ul>
+          </div>
+        </section>
+      </div><!-- /.stage (left column) -->
 
-      <div class="scrollcol">
-      <!-- ── Builder controls (WI08 / AC-C1, AC-C2, AC-C3) ────────────────────── -->
+      <!-- Right column: configuration + inspection. Scrolls independently of the car/race. -->
+      <div class="config-col">
+      <!-- ── Builder controls (WI08 / AC-C1, AC-C2, AC-C3) ──────────────────────────────── -->
       <form id="builder" class="panel tune" aria-labelledby="tune-h">
         <h2 id="tune-h">Tune it</h2>
 
+        <!-- Ordered by what matters most (Mark Rober's ranking). Size/fit sliders that only
+             affect legality come last. -->
         <div class="field">
-          <label for="weight">Weight <output id="weight-display" class="val">5.0</output> oz</label>
-          <input id="weight" name="weight" type="range" min="1.0" max="7.0" step="0.1" value="5.0" />
+          <label for="weight">Weight <output id="weight-display" class="val">4.0</output> oz</label>
+          <input id="weight" name="weight" type="range" min="1.0" max="7.0" step="0.1" value="4.0" />
           <p id="weight-legal" class="badge" data-testid="weight-legal"></p>
         </div>
 
         <div class="field">
-          <label for="placement">Weight placement <output id="placement-display" class="val">0.85</output> in ahead of rear axle</label>
-          <input id="placement" name="placement" type="range" min="0.10" max="2.50" step="0.05" value="0.85" />
-          <p class="hint">Lower = weight further back (faster — but too far back makes the car unstable and can slow it down or tip it).</p>
+          <label for="placement">Weight placement <output id="placement-display" class="val">1.30</output> in ahead of rear axle</label>
+          <input id="placement" name="placement" type="range" min="0.10" max="2.50" step="0.05" value="1.3" />
+          <p class="hint">Where the car balances — how far its center of mass sits ahead of the rear axle.</p>
         </div>
 
         <div class="field">
-          <label for="wheelbase">Wheelbase <output id="wheelbase-display" class="val">4.38</output> in between axles</label>
-          <input id="wheelbase" name="wheelbase" type="range" min="3.5" max="5.0" step="0.125" value="4.375" />
-          <p class="hint">Stays inside the body — to widen the wheelbase, make the body longer first.</p>
+          <label for="wheel-mass">Wheel weight <output id="wheel-mass-display" class="val">0.14</output> oz each</label>
+          <input id="wheel-mass" name="wheel-mass" type="range" min="0.07" max="0.20" step="0.01" value="0.14" />
+          <p class="hint">How much each of the car's wheels weighs.</p>
+        </div>
+
+        <div class="field">
+          <label for="axle-mu">Axle prep <output id="axle-mu-display" class="val">Average</output></label>
+          <input id="axle-mu" name="axle-mu" type="range" min="0.05" max="0.40" step="0.01" value="0.23" />
+          <p class="hint">How slippery the axles are where the wheels spin — from polished + graphite to bare metal.</p>
+        </div>
+
+        <div class="field">
+          <label for="steer-angle">Steering <output id="steer-angle-display" class="val">5.0°</output></label>
+          <input id="steer-angle" name="steer-angle" type="range" min="0" max="10" step="0.25" value="5" />
+          <p class="hint">The angle the front is steered so the car leans against one guide rail as it rolls.</p>
+        </div>
+
+        <div class="field">
+          <label for="body-cd">Body shape <output id="body-cd-display" class="val">Rounded</output></label>
+          <input id="body-cd" name="body-cd" type="range" min="0.15" max="0.85" step="0.05" value="0.5" />
+          <p class="hint">How streamlined the body's shape is, from a sleek wedge to a blocky brick.</p>
+        </div>
+
+        <div class="field">
+          <label for="body-width">Body width <output id="body-width-display" class="val">2.00</output> in</label>
+          <input id="body-width" name="body-width" type="range" min="1.0" max="3.0" step="0.05" value="2.0" />
+          <p class="hint">How wide the car body is, side to side.</p>
+        </div>
+
+        <div class="field">
+          <label for="body-height">Body height <output id="body-height-display" class="val">2.3</output> in</label>
+          <input id="body-height" name="body-height" type="range" min="0.5" max="4.0" step="0.1" value="2.3" />
+          <p class="hint">How tall the car body is, top to bottom.</p>
         </div>
 
         <fieldset class="field segmented">
@@ -67,70 +128,22 @@
           <label><input type="radio" name="wheels-count" value="3" /> <span>3 (one lifted)</span></label>
         </fieldset>
 
+        <p class="hint tune-divider">Below: size &amp; fit — these don't change speed, only whether the car is legal.</p>
+
         <div class="field">
-          <label for="wheel-mass">Wheel weight <output id="wheel-mass-display" class="val">0.09</output> oz each</label>
-          <input id="wheel-mass" name="wheel-mass" type="range" min="0.07" max="0.20" step="0.01" value="0.09" />
-          <p class="hint">Lighter wheels spin up faster.</p>
+          <label for="wheelbase">Wheelbase <output id="wheelbase-display" class="val">4.25</output> in between axles</label>
+          <input id="wheelbase" name="wheelbase" type="range" min="3.5" max="5.0" step="0.125" value="4.25" />
+          <p class="hint">The distance between the front and rear axles (it always stays inside the body).</p>
         </div>
 
         <div class="field">
-          <label for="axle-mu">Axle prep <output id="axle-mu-display" class="val">Slick</output></label>
-          <input id="axle-mu" name="axle-mu" type="range" min="0.05" max="0.40" step="0.01" value="0.10" />
-          <p class="hint">Slide left for slicker, polished + graphite axles (faster).</p>
+          <label for="body-length">Body length <output id="body-length-display" class="val">6.00</output> in</label>
+          <input id="body-length" name="body-length" type="range" min="4.0" max="8.0" step="0.25" value="6.0" />
+          <p class="hint">How long the car body is, front to back.</p>
         </div>
-
-        <div class="field">
-          <label for="body-cd">Body shape <output id="body-cd-display" class="val">Sleek wedge</output></label>
-          <input id="body-cd" name="body-cd" type="range" min="0.15" max="0.85" step="0.05" value="0.20" />
-          <p class="hint">Slide left for a lower, sleeker body that slips through the air.</p>
-        </div>
-
-        <div class="field">
-          <label for="body-width">Body width <output id="body-width-display" class="val">1.75</output> in</label>
-          <input id="body-width" name="body-width" type="range" min="1.0" max="3.0" step="0.05" value="1.75" />
-          <p class="hint">Wider catches more air (slower) — and over 2.75 in is usually too wide to race.</p>
-        </div>
-
-        <div class="field">
-          <label for="body-height">Body height <output id="body-height-display" class="val">2.5</output> in</label>
-          <input id="body-height" name="body-height" type="range" min="0.5" max="4.0" step="0.1" value="2.5" />
-          <p class="hint">Taller catches more air (slower).</p>
-        </div>
-
-        <div class="field">
-          <label for="body-length">Body length <output id="body-length-display" class="val">7.00</output> in</label>
-          <input id="body-length" name="body-length" type="range" min="4.0" max="8.0" step="0.25" value="7.0" />
-          <p class="hint">Doesn't change speed — but over 7 in is usually too long to race.</p>
-        </div>
-
-        <div class="field">
-          <label for="ground-clearance">Ground clearance <output id="ground-clearance-display" class="val">0.40</output> in</label>
-          <input id="ground-clearance" name="ground-clearance" type="range" min="0.0" max="1.0" step="0.05" value="0.4" />
-          <p class="hint">Doesn't change speed — but it must clear the center rail (about 3/8 in).</p>
-        </div>
-
-        <label class="toggle"><input id="alignment-rail" type="checkbox" checked /> <span>Rail-rider alignment</span></label>
 
         <p id="control-error" class="error" role="alert" data-testid="control-error" hidden></p>
       </form>
-
-      <!-- ── Result & "why" (WI10 / AC-X1, AC-X2, AC-X3, AC-X4) ───────────────── -->
-      <section id="result" class="panel telemetry" aria-labelledby="result-h" aria-live="polite">
-        <h2 id="result-h">Telemetry</h2>
-        <p id="result-headline" class="headline" data-testid="result-headline">
-          Tune your car, then hit <strong>Race ▶</strong>
-        </p>
-        <p id="result-time" class="time" data-testid="result-time" hidden></p>
-        <div id="breakdown-wrap" hidden>
-          <h3>Where did your speed go?</h3>
-          <ul id="breakdown" class="breakdown" data-testid="breakdown"></ul>
-        </div>
-        <p id="why" class="why" data-testid="why" hidden></p>
-        <div id="tips-wrap" hidden>
-          <h3>Try this next</h3>
-          <ul id="tips" class="tips" data-testid="tips"></ul>
-        </div>
-      </section>
 
       <!-- ── Inspection / legality (feature 0008) ────────────────────────────── -->
       <section class="panel inspect" aria-labelledby="inspect-h" aria-live="polite">
@@ -141,22 +154,132 @@
           check your own pack's rules.
         </p>
       </section>
+      </div><!-- /.config-col (right column) -->
+    </div><!-- /#app (Race view) -->
 
-      <!-- ── Garage (WI12 / AC-S1, AC-S2, AC-S3) ─────────────────────────────── -->
-      <section class="panel garage" aria-labelledby="garage-h">
-        <h2 id="garage-h">Garage</h2>
+    <!-- ── Learn mode (feature 0005): what each lever is + how much it matters ──────── -->
+    <section id="learn" class="learn" hidden aria-labelledby="learn-h">
+      <div class="learn-inner">
+        <h2 id="learn-h">Learn the physics</h2>
+        <p class="learn-intro">
+          A pinewood derby car has no motor — it's powered only by gravity. It trades the
+          <b>height</b> it starts at for <b>speed</b>, then fights <b>friction</b> and <b>air</b>
+          all the way to the finish. Below is what actually matters, ranked the way
+          <b>Mark Rober</b> lab-tested it — and our simulator is tuned to match.
+        </p>
+
+        <h3 class="learn-sub">What matters most — Mark Rober's order</h3>
+        <ol class="ranking">
+          <li><span class="rk-name">Weight, and putting it in the back (5&nbsp;oz, ~1″ ahead of the rear axle)</span> <span class="impact huge">~4.6 lengths</span></li>
+          <li><span class="rk-name">Lighter wheels</span> <span class="impact huge">~2.1 lengths</span></li>
+          <li><span class="rk-name">Polished &amp; bent axles (less friction)</span> <span class="impact med">High</span></li>
+          <li><span class="rk-name">Rail-riding (steer into one rail)</span> <span class="impact med">Medium</span></li>
+          <li><span class="rk-name">Aerodynamics (wedge body)</span> <span class="impact med">~1.4 lengths</span></li>
+          <li><span class="rk-name">Three wheels touching</span> <span class="impact small">~1.1 lengths</span></li>
+          <li><span class="rk-name">Graphite on the axles</span> <span class="impact small">Helps&nbsp;#3</span></li>
+        </ol>
+        <p class="learn-note">
+          The "lengths" are how far ahead each trick finishes, from Mark Rober's testing. Weight
+          and where you put it dominate everything — nail those first, then work down the list.
+        </p>
+
+        <div class="lessons">
+          <article class="lesson">
+            <h3><span class="lesson-ico" aria-hidden="true">🏋️</span> Weight <span class="impact huge">Huge</span></h3>
+            <p><b>What it is:</b> the total weight of your car — most leagues cap it at 5.0&nbsp;oz.</p>
+            <p><b>The science:</b> a heavier car stores more <i>potential energy</i> at the top of the ramp, and that turns into more speed. Get as close to the 5&nbsp;oz limit as you can.</p>
+            <p><b>See it:</b> drop from 5&nbsp;oz to 2&nbsp;oz and the clock jumps almost half a second.</p>
+          </article>
+
+          <article class="lesson">
+            <h3><span class="lesson-ico" aria-hidden="true">⚖️</span> Weight placement <span class="impact huge">Huge</span></h3>
+            <p><b>What it is:</b> <i>where</i> the weight sits. Rober's rule: about <b>1 inch ahead of the rear axle</b>.</p>
+            <p><b>The science:</b> weight toward the back stays high on the ramp longer, so gravity pulls on it through more of the drop. Too far back, though, and the front goes light and wanders — there's a sweet spot.</p>
+            <p><b>See it:</b> the trickiest lever — small moves change a lot, and overshooting backfires.</p>
+          </article>
+
+          <article class="lesson">
+            <h3><span class="lesson-ico" aria-hidden="true">⚙️</span> Lighter wheels <span class="impact huge">~2.1 lengths</span></h3>
+            <p><b>What it is:</b> how much each wheel weighs.</p>
+            <p><b>The science:</b> a spinning wheel stores energy too (rotational inertia). <b>Lighter</b> wheels spin up easier, so more of gravity's energy goes into moving <i>forward</i> instead of into spinning — Rober's #2 trick.</p>
+            <p><b>See it:</b> slide wheel weight down and the clock drops.</p>
+          </article>
+
+          <article class="lesson">
+            <h3><span class="lesson-ico" aria-hidden="true">🛢️</span> Axle prep: polish, bend &amp; graphite <span class="impact med">High</span></h3>
+            <p><b>What it is:</b> how slippery the axles are where the wheels spin.</p>
+            <p><b>The science:</b> polishing the axles, gently <b>bending</b> them so the wheel rides smoothly against the nail head, and adding <b>graphite</b> all cut friction — the speed-stealer that acts the whole way down.</p>
+            <p><b>See it:</b> slide axle prep from polished toward bare metal and you lose a couple tenths.</p>
+          </article>
+
+          <article class="lesson">
+            <h3><span class="lesson-ico" aria-hidden="true">🛤️</span> Rail-riding (steering) <span class="impact med">Medium</span></h3>
+            <p><b>What it is:</b> a tiny steer so the car leans against <i>one</i> guide rail instead of bouncing between both.</p>
+            <p><b>The science:</b> no steer → it ping-pongs and every bump steals speed; a few degrees pins it to one rail so it rolls straight; too much scrubs. It's a valley — a little is best.</p>
+            <p><b>See it:</b> sweep the steering slider for the fastest spot, around 3°.</p>
+          </article>
+
+          <article class="lesson">
+            <h3><span class="lesson-ico" aria-hidden="true">💨</span> Aerodynamics <span class="impact med">~1.4 lengths</span></h3>
+            <p><b>What it is:</b> how much air the car pushes — its <b>shape</b> (sleek wedge vs. blocky) and <b>frontal size</b> (width × height).</p>
+            <p><b>The science:</b> a low, sleek wedge slips through the air while a tall blocky brick plows it. It matters less than weight or friction, but Rober still measured about 1.4 car lengths — so don't ignore it.</p>
+            <p><b>See it:</b> turn the body into a tall, wide brick and watch the time slip.</p>
+          </article>
+
+          <article class="lesson">
+            <h3><span class="lesson-ico" aria-hidden="true">🛞</span> Three wheels touching <span class="impact small">~1.1 lengths</span></h3>
+            <p><b>What it is:</b> lifting one front wheel a hair so only three touch the track.</p>
+            <p><b>The science:</b> a wheel that isn't touching can't add friction or steal spin energy — so three rolling wheels beat four. (Check your pack allows it.)</p>
+            <p><b>See it:</b> switch "Wheels touching" to 3 and the clock ticks down a little.</p>
+          </article>
+
+          <article class="lesson">
+            <h3><span class="lesson-ico" aria-hidden="true">📏</span> Size &amp; the rule book <span class="impact none">Legality only</span></h3>
+            <p><b>What it is:</b> wheelbase and the body's length/width/height don't set speed directly — they decide whether your car is <b>legal</b>.</p>
+            <p><b>The science:</b> packs cap weight at 5&nbsp;oz and limit the car's size so the race is fair. The <b>Inspection</b> panel checks these live as you build.</p>
+            <p><b>See it:</b> push a dimension past its limit and the inspection flags it.</p>
+          </article>
+        </div>
+
+        <h3 class="learn-sub">Watch it: Mark Rober's pinewood derby science</h3>
+        <p class="learn-note">
+          These rankings come straight from Mark Rober's lab-tested video (made with Scout Life).
+          Heads-up: the video streams from YouTube, so this one part needs an internet connection.
+        </p>
+        <div class="video-wrap">
+          <iframe src="https://www.youtube-nocookie.com/embed/a5A6SCE0eVw"
+                  title="The Science of Making the Fastest Pinewood Derby — Mark Rober"
+                  loading="lazy" referrerpolicy="strict-origin-when-cross-origin"
+                  allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowfullscreen></iframe>
+        </div>
+
+        <p class="learn-foot">Now jump back to <b>🏁 Race</b> and see if you can build the fastest legal car.</p>
+      </div>
+    </section>
+
+    <!-- ── Garage modal (WI12 / AC-S1, AC-S2, AC-S3) — opened by Save/Load on the car ─── -->
+    <dialog id="garage-modal" class="modal" aria-labelledby="garage-h">
+      <div class="modal-card">
+        <header class="modal-head">
+          <h2 id="garage-h">Garage</h2>
+          <button id="garage-close" type="button" class="modal-close" aria-label="Close">✕</button>
+        </header>
+
         <div class="field garage-save">
-          <label for="garage-name">Name this car</label>
+          <label for="garage-name">Save this car</label>
           <div class="garage-row">
             <input id="garage-name" type="text" maxlength="40" placeholder="My fast car" />
             <button id="save" type="button" class="btn">Save</button>
           </div>
         </div>
+
+        <h3>Your saved cars</h3>
         <ul id="garage-list" class="garage-list" data-testid="garage-list"></ul>
         <p id="garage-empty" class="hint" data-testid="garage-empty">No saved cars yet.</p>
         <button id="clear-garage" type="button" class="btn danger">Clear my garage</button>
-      </section>
-      </div><!-- /.scrollcol -->
+      </div>
+    </dialog>
     </main>
 
     <script type="module" src="/src/main.ts"></script>

@@ -12,23 +12,22 @@ test("the car preview reflects the default design and updates as controls change
   page,
 }) => {
   await gotoReady(page);
-  const summary = page.locator("#preview-summary");
-  // Default car: sleek wedge body, 4 wheels.
-  await expect(summary).toContainText("sleek wedge");
-  await expect(summary).toContainText("4 wheels");
+  // The visible description was removed; the preview's plain-language summary now lives only in
+  // the canvas's accessible label, which still tracks the design.
+  const car = page.locator("#car-preview");
+  // Default starter car: a rounded body, 4 wheels.
+  await expect(car).toHaveAttribute("aria-label", /rounded/);
+  await expect(car).toHaveAttribute("aria-label", /4 wheels/);
 
   // Body shape → blocky.
   await setRange(page, "#body-cd", "0.85");
-  await expect(summary).toContainText("blocky");
+  await expect(car).toHaveAttribute("aria-label", /blocky/);
 
   // Wheel count → 3 (one lifted).
   await page.locator('input[name="wheels-count"][value="3"]').check();
-  await expect(summary).toContainText("3 wheels");
+  await expect(car).toHaveAttribute("aria-label", /3 wheels/);
 
   // Weight placement → toward the back.
   await setRange(page, "#placement", "0.30");
-  await expect(summary).toContainText("toward the back");
-
-  // The canvas's accessible label tracks the same description.
-  await expect(page.locator("#car-preview")).toHaveAttribute("aria-label", /Car preview:/);
+  await expect(car).toHaveAttribute("aria-label", /toward the back/);
 });

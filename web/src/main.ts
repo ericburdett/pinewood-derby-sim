@@ -15,6 +15,7 @@ import {
   validate,
 } from "./pyodide-bridge";
 import { renderResult } from "./result-panel";
+import { initTabs } from "./tabs";
 import { DEFAULT_CAR } from "./types";
 
 declare global {
@@ -40,6 +41,9 @@ function registerServiceWorker(): void {
 async function main(): Promise<void> {
   const status = el("status");
   registerServiceWorker();
+  // Tabs work immediately — the Learn view is static, so it's usable while the engine boots
+  // (and even if booting fails). The Race view is gated on readiness via setReady below.
+  const tabs = initTabs();
 
   try {
     await initBridge((msg) => {
@@ -47,13 +51,13 @@ async function main(): Promise<void> {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    status.textContent = `Could not load the simulator: ${message}`;
+    status.textContent = `Could not load the simulator: ${message} — the Learn tab still works.`;
     window.__derby = { ready: false, error: message };
     return;
   }
 
   status.textContent = "Ready";
-  el("app").hidden = false;
+  tabs.setReady(true);
   el<HTMLButtonElement>("race").disabled = false;
 
   const controls = new Controls();
@@ -61,10 +65,13 @@ async function main(): Promise<void> {
     el<HTMLCanvasElement>("track-canvas"),
     trackInfo(),
     el<HTMLOutputElement>("clock"),
+    el<HTMLOutputElement>("mph"),
   );
-  const preview = new CarPreview(el<HTMLCanvasElement>("car-preview"), el("preview-summary"));
+  const preview = new CarPreview(el<HTMLCanvasElement>("car-preview"));
   const garage = new Garage(el<HTMLUListElement>("garage-list"), el("garage-empty"));
   const controlError = el<HTMLParagraphElement>("control-error");
+  const stage = el("stage"); // data-raced flips to "true" on finish → reveal telemetry below
+  const garageModal = el<HTMLDialogElement>("garage-modal");
 
   const inspectionList = el<HTMLUListElement>("inspection");
   function renderInspection(): void {
@@ -94,9 +101,10 @@ async function main(): Promise<void> {
   // visuals, not just the slider positions).
   function syncDesignViews(): void {
     const s = controls.read();
+    stage.dataset.raced = "false"; // editing the design hides the stale telemetry again
     preview.render(s);
     renderInspection();
-    animator.renderIdle(s);
+    animator.renderIdle(s); // the always-visible race box shows the staged car you're tuning
   }
   controls.init(syncDesignViews);
   controls.apply(DEFAULT_CAR); // AC-C2: a legal, finishing default car, immediately raceable
@@ -123,7 +131,12 @@ async function main(): Promise<void> {
     clearError();
     const view = race(state);
     renderResult(view);
-    void animator.play(view, state);
+    // Hide any stale telemetry, animate the run in the always-visible race box, then reveal
+    // the telemetry below it once the animation finishes (animator.play handles reduced motion).
+    stage.dataset.raced = "false";
+    void animator.play(view, state).then(() => {
+      stage.dataset.raced = "true";
+    });
   }
 
   el<HTMLFormElement>("builder").addEventListener("submit", (event) => {
@@ -140,6 +153,7 @@ async function main(): Promise<void> {
           controls.apply(fromGarageEntry(entry)); // restores every control (AC-S2)
           syncDesignViews(); // refresh preview + inspection + track to the loaded design
           clearError();
+          garageModal.close(); // loaded — close the modal so the car is visible
         } catch {
           showError("That saved car couldn't be loaded.");
         }
@@ -162,6 +176,19 @@ async function main(): Promise<void> {
   el("clear-garage").addEventListener("click", () => {
     garage.clear();
     refreshGarage();
+  });
+
+  // Garage modal: the Save/Load chips on the car open it; ✕, Esc, or a backdrop click close it.
+  el("open-save").addEventListener("click", () => {
+    if (!garageModal.open) garageModal.showModal();
+    el<HTMLInputElement>("garage-name").focus();
+  });
+  el("open-load").addEventListener("click", () => {
+    if (!garageModal.open) garageModal.showModal();
+  });
+  el("garage-close").addEventListener("click", () => garageModal.close());
+  garageModal.addEventListener("click", (event) => {
+    if (event.target === garageModal) garageModal.close(); // click outside the card
   });
 
   refreshGarage();

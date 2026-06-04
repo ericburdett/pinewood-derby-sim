@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { gotoReady, raceAndWait, setRange } from "./util";
+import { gotoReady, raceAndWait } from "./util";
 
 // WI10 — result & "why" panel (PRD AC-X1, AC-X2, AC-X3, AC-X4 surfaced).
 test.beforeEach(async ({ page }) => {
@@ -17,7 +17,7 @@ const BANNED = [
   "potential energy",
 ];
 
-test("a finished race shows a ranked breakdown, a why, and tips (AC-X1, AC-X2)", async ({
+test("a finished race shows a ranked 'where did your speed go?' breakdown (AC-X1)", async ({
   page,
 }) => {
   await gotoReady(page);
@@ -28,9 +28,6 @@ test("a finished race shows a ranked breakdown, a why, and tips (AC-X1, AC-X2)",
     .evaluateAll((els) => els.map((e) => Number((e as HTMLElement).dataset.share)));
   expect(shares.length).toBeGreaterThan(1);
   expect(shares).toEqual([...shares].sort((a, b) => b - a)); // largest-first (AC-X1)
-
-  await expect(page.locator("#why")).toBeVisible();
-  expect(((await page.locator("#why").textContent()) ?? "").length).toBeGreaterThan(0); // AC-X2
 
   // The "speed you kept" bar is present alongside the loss bars.
   const keys = await page
@@ -48,24 +45,13 @@ test("no technical jargon reaches the kid in the result panel (AC-X3)", async ({
   }
 });
 
-// Coaching must be state-aware: the default car is already fully tuned, so it is celebrated —
-// NOT told to "fix" levers it has already optimized (the reported bug). A genuinely suboptimal
-// car still gets the real, actionable fix.
-test("a fully-tuned car is celebrated, not nagged to fix already-optimal levers", async ({
-  page,
-}) => {
+// The Race tab is a TEST: the breakdown shows WHERE speed went, but the page does NOT explain
+// WHY or hand out "try this next" tips (feature 0005) — that teaching lives on the Learn tab.
+test("the Race page shows no 'why' explanation or coaching tips", async ({ page }) => {
   await gotoReady(page);
   await raceAndWait(page);
-  const tips = ((await page.locator("#tips").innerText()) ?? "").toLowerCase();
-  expect(tips).toContain("tuned every part");
-  expect(tips).not.toContain("polish your axles");
-  expect(tips).not.toContain("fix your"); // no "fix your alignment" on a rail-rider
-});
-
-test("a genuinely suboptimal lever still gets actionable advice", async ({ page }) => {
-  await gotoReady(page);
-  await setRange(page, "#axle-mu", "0.40"); // rough axles — a real, fixable loss
-  await raceAndWait(page);
-  const tips = ((await page.locator("#tips").innerText()) ?? "").toLowerCase();
-  expect(tips).toContain("polish your axles");
+  await expect(page.locator("#why")).toHaveCount(0);
+  await expect(page.locator("#tips")).toHaveCount(0);
+  const result = (await page.locator("#result").innerText()).toLowerCase();
+  expect(result).not.toContain("try this next");
 });

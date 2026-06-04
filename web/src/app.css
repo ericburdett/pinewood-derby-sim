@@ -18,6 +18,12 @@
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 }
 
+/* The hidden attribute must win over component display rules (e.g. .layout's grid), so
+   toggling [hidden] on the Race/Learn views and result rows truly shows/hides them. */
+[hidden] {
+  display: none !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -25,7 +31,7 @@
 html,
 body {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
 }
 
 body {
@@ -36,6 +42,18 @@ body {
     radial-gradient(900px 500px at -10% 10%, rgba(164, 198, 89, 0.06), transparent 55%),
     linear-gradient(180deg, var(--bg-1), var(--bg-0));
   background-attachment: fixed;
+  /* App shell: header + a flex-filling main. The page itself never scrolls — the Race
+     view's two columns (and the Learn view) own their own overflow. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* Main fills the space under the header; its child view (#app or #learn) flexes to fill. */
+.main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────────── */
@@ -78,46 +96,350 @@ body {
   font-size: 0.92rem;
 }
 
-/* ── Layout ─────────────────────────────────────────────────────────────────── */
-/* Two columns: a sticky "stage" (the car preview + the race) stays in view while the
-   controls / telemetry / inspection / garage column scrolls past it. */
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
-  gap: 18px;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 22px clamp(16px, 4vw, 40px) 48px;
-  align-items: start;
-}
-.stage {
-  position: sticky;
-  top: 88px;
+/* ── Tabs (Race / Learn) ──────────────────────────────────────────────────────── */
+.tabs {
   display: flex;
-  flex-direction: column;
-  gap: 18px;
-  max-height: calc(100vh - 104px);
-  overflow: auto;
-  min-width: 0;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(7, 13, 24, 0.6);
+  border: 1px solid var(--panel-edge);
 }
-.scrollcol {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  min-width: 0;
+.tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 0.4rem 0.95rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tab:hover {
+  color: var(--ink);
+}
+.tab.active {
+  background: linear-gradient(90deg, var(--cyan), var(--lime));
+  color: var(--bg-0);
 }
 
-@media (max-width: 1024px) {
+/* ── Learn mode (feature 0005) ────────────────────────────────────────────────── */
+/* Fills the space under the header and scrolls on its own (the page itself never scrolls —
+   see body/.main). min-height:0 lets it shrink inside the flex column so overflow kicks in. */
+.learn {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: clamp(16px, 4vw, 40px);
+}
+.learn-inner {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.learn h2 {
+  font-size: 1.5rem;
+  margin: 0 0 0.5rem;
+}
+.learn-sub {
+  margin: 1.8rem 0 0.7rem;
+  font-size: 1.12rem;
+}
+.learn-intro,
+.learn-note,
+.learn-foot {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.learn-foot {
+  margin-top: 1.8rem;
+}
+/* Responsive 16:9 YouTube embed (Learn page). NOTE: this iframe streams from YouTube at
+   runtime — a deliberate, scoped exception to the offline / same-origin rule, just for the
+   Mark Rober video (per product decision). The rest of the app stays offline-capable. */
+.video-wrap {
+  margin-top: 1rem;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--panel-edge);
+}
+.video-wrap iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+}
+/* Divider in the Tune column before the legality-only (size/fit) sliders. */
+.tune-divider {
+  margin-top: 1.1rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--panel-edge);
+}
+.ranking {
+  counter-reset: rk;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.ranking li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.5rem 0.85rem;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+}
+.ranking li::before {
+  counter-increment: rk;
+  content: counter(rk);
+  font-weight: 800;
+  color: var(--cyan);
+  min-width: 1.1em;
+}
+.rk-name {
+  font-weight: 600;
+  flex: 1;
+}
+.lessons {
+  display: grid;
+  gap: 14px;
+  margin-top: 1.2rem;
+}
+.lesson {
+  padding: 1rem 1.2rem;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+}
+.lesson h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 0.6rem;
+  font-size: 1.12rem;
+}
+.lesson-ico {
+  font-size: 1.25rem;
+}
+.lesson p {
+  margin: 0.4rem 0;
+  line-height: 1.55;
+}
+.impact {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.impact.huge {
+  background: rgba(164, 198, 89, 0.22);
+  color: var(--lime);
+  border: 1px solid rgba(164, 198, 89, 0.5);
+}
+.impact.med {
+  background: rgba(90, 166, 207, 0.2);
+  color: var(--cyan);
+  border: 1px solid rgba(90, 166, 207, 0.5);
+}
+.impact.small {
+  background: rgba(240, 200, 121, 0.18);
+  color: var(--warn);
+  border: 1px solid rgba(240, 200, 121, 0.45);
+}
+.impact.tiny {
+  background: rgba(159, 179, 204, 0.15);
+  color: var(--muted);
+  border: 1px solid var(--panel-edge);
+}
+.impact.none {
+  background: rgba(159, 179, 204, 0.12);
+  color: var(--muted);
+  border: 1px dashed var(--panel-edge);
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────────── */
+/* Two columns that scroll INDEPENDENTLY: the left "stage" (car + race + telemetry) stays
+   in view while the right configuration column scrolls past it. The page itself never
+   scrolls — each column owns its own overflow (see body/.main above). */
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 18px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 22px clamp(16px, 4vw, 40px);
+  overflow: hidden; /* the columns scroll, not this container */
+}
+/* Each column scrolls on its own. min-height:0 lets a grid item shrink below its content
+   so overflow-y can actually kick in; the small bottom padding keeps the last box clear of
+   the scrollbar edge. */
+.stage,
+.config-col {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 4px;
+}
+.config-col {
+  gap: 18px;
+}
+/* Config: sliders stack in a single column within the (narrower) right column. The heading,
+   the wheels fieldset, and the error span the full width. */
+.tune {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+}
+.tune > h2,
+.tune > .segmented,
+.tune > .error {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  /* Narrow screens: stack into one column and let that single column scroll as a whole,
+     rather than two independent scroll regions side by side. */
   .layout {
     grid-template-columns: 1fr;
+    overflow-y: auto;
   }
-  .stage {
-    position: static;
-    max-height: none;
+  .stage,
+  .config-col {
     overflow: visible;
   }
 }
 
+/* ── Save / Load chips on the car ─────────────────────────────────────────────── */
+.car-actions {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+}
+.chip {
+  min-height: 2.2rem;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: rgba(7, 13, 24, 0.72);
+  border: 1px solid var(--panel-edge);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+
+/* ── Garage modal ─────────────────────────────────────────────────────────────── */
+.modal {
+  margin: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  max-width: min(92vw, 440px);
+}
+.modal::backdrop {
+  background: rgba(4, 8, 16, 0.66);
+  backdrop-filter: blur(3px);
+}
+.modal-card {
+  padding: 22px 24px 24px;
+  color: var(--ink);
+  background: var(--bg-1);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modal-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.modal-close {
+  min-height: auto;
+  padding: 0.2rem 0.55rem;
+  background: transparent;
+}
+.modal h3 {
+  margin: 20px 0 8px;
+  font-size: 0.95rem;
+}
+
+/* ── Car / race boxes ─────────────────────────────────────────────────────────── */
+/* The car box and the race box are separate, always-visible panels stacked in the left
+   column. The race canvas shows the staged car while you tune, then animates on Race. */
+/* Cap their width (and centre them) so the canvases stay compact and both boxes — plus the
+   telemetry that appears below — sit comfortably in the column without it growing too tall. */
+.preview,
+.track,
+.result-box {
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+}
+/* Footer row under each canvas (race button vs. Time/MPH), a fixed min-height so the boxes
+   keep a steady shape. */
+.pane-foot {
+  min-height: 54px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+.race-btn.in-car {
+  width: 100%;
+  max-width: 340px;
+  justify-content: center;
+  font-size: 1.05rem;
+  padding: 0.8rem 1.6rem;
+}
+.race-readout p {
+  margin: 0;
+  color: var(--muted);
+}
+.speedo output {
+  color: var(--lime);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* Telemetry box below the race box — hidden until a race finishes, then fades in. */
+.result-box {
+  display: none;
+  min-width: 0;
+}
+.stage[data-raced="true"] .result-box {
+  display: block;
+  animation: fade-in 360ms ease;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 /* ── Glass panels ───────────────────────────────────────────────────────────── */
 .panel {
   position: relative;
@@ -381,11 +703,11 @@ button:disabled {
 .bar-fill {
   height: 100%;
   background: linear-gradient(90deg, #2b6f9e, var(--cyan));
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 7px rgba(90, 166, 207, 0.32);
 }
 .bar-fill.kept {
   background: linear-gradient(90deg, #4f9e5f, var(--lime));
-  box-shadow: 0 0 10px rgba(163, 230, 53, 0.5);
+  box-shadow: 0 0 7px rgba(164, 198, 89, 0.32);
 }
 .bar-pct {
   flex: 0 0 3.2rem;
