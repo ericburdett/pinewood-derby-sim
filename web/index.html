@@ -16,6 +16,7 @@
       <nav class="tabs" role="tablist" aria-label="Views">
         <button id="tab-race" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="app">🏁 Race</button>
         <button id="tab-learn" class="tab" type="button" role="tab" aria-selected="false" aria-controls="learn">📚 Learn</button>
+        <button id="tab-board" class="tab" type="button" role="tab" aria-selected="false" aria-controls="board">🏆 Board</button>
       </nav>
     </header>
 
@@ -254,7 +255,34 @@
                   allowfullscreen></iframe>
         </div>
 
+        <h3 class="learn-sub">Run it on your phone</h3>
+        <p class="learn-note">
+          Scan this with your phone's camera to open the simulator there — build and race
+          cars wherever you are.
+        </p>
+        <div class="qr-card">
+          <img class="qr-img" src="/derby-qr.svg" width="180" height="180"
+               alt="QR code linking to the Derby Sim website" />
+          <a class="qr-link" href="https://ericburdett.github.io/pinewood-derby-sim/">
+            ericburdett.github.io/pinewood-derby-sim
+          </a>
+        </div>
+
         <p class="learn-foot">Now jump back to <b>🏁 Race</b> and see if you can build the fastest legal car.</p>
+      </div>
+    </section>
+
+    <!-- ── Leaderboard (local, all-time, fastest-first) ─────────────────────────────────── -->
+    <section id="board" class="board" hidden aria-labelledby="board-h">
+      <div class="board-inner">
+        <div class="board-header">
+          <h2 id="board-h">Your runs</h2>
+          <span id="lb-count" class="lb-count"></span>
+        </div>
+        <p class="hint">Every finished race you run is saved here, sorted fastest first. Hit <b>Load car</b> on any row to race that design again.</p>
+        <ul id="lb-list" class="lb-list" data-testid="lb-list"></ul>
+        <p id="lb-empty" class="hint" data-testid="lb-empty">No runs yet — race a car to start tracking your times.</p>
+        <button id="clear-lb" type="button" class="btn danger">Clear all runs</button>
       </div>
     </section>
 

@@ -5,6 +5,7 @@ import { RaceAnimator } from "./animator";
 import { CarPreview } from "./car-preview";
 import { Controls } from "./controls";
 import { Garage } from "./garage";
+import { Leaderboard } from "./leaderboard";
 import {
   fromGarageEntry,
   initBridge,
@@ -69,6 +70,11 @@ async function main(): Promise<void> {
   );
   const preview = new CarPreview(el<HTMLCanvasElement>("car-preview"));
   const garage = new Garage(el<HTMLUListElement>("garage-list"), el("garage-empty"));
+  const leaderboard = new Leaderboard(
+    el("lb-list"),
+    el("lb-empty"),
+    el("lb-count"),
+  );
   const controlError = el<HTMLParagraphElement>("control-error");
   const stage = el("stage"); // data-raced flips to "true" on finish → reveal telemetry below
   const garageModal = el<HTMLDialogElement>("garage-modal");
@@ -148,11 +154,24 @@ async function main(): Promise<void> {
       return;
     }
     renderResult(view);
+    if (view.finished && view.time_seconds != null) {
+      leaderboard.record(view.time_seconds, state);
+      renderLeaderboard();
+    }
     // Hide any stale telemetry, animate the run in the always-visible race box, then reveal
     // the telemetry below it once the animation finishes (animator.play handles reduced motion).
     stage.dataset.raced = "false";
     void animator.play(view, state).then(() => {
       stage.dataset.raced = "true";
+    });
+  }
+
+  function renderLeaderboard(): void {
+    leaderboard.render((car) => {
+      controls.apply(car);
+      syncDesignViews();
+      clearError();
+      tabs.switchTo("race");
     });
   }
 
@@ -209,6 +228,12 @@ async function main(): Promise<void> {
   });
 
   refreshGarage();
+  renderLeaderboard();
+
+  el("clear-lb").addEventListener("click", () => {
+    leaderboard.clear();
+    renderLeaderboard();
+  });
 
   // Low-level handle for the headless specs (mirrors the bridge; not used by the UI itself).
   window.__derby = { ready: true, default: DEFAULT_CAR, race, validate, trackInfo };
