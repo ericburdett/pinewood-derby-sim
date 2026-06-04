@@ -311,14 +311,17 @@ body {
 }
 
 @media (max-width: 900px) {
-  /* Narrow screens: stack into one column and let that single column scroll as a whole,
-     rather than two independent scroll regions side by side. */
+  /* Narrow screens: stop being a fixed-height grid (which squeezed each column to half the
+     viewport and let the car/race overflow into the config). Flow as a normal block so the
+     sections stack at their natural height — Your car → The race → config → inspection — and
+     scroll as one column. */
   .layout {
-    grid-template-columns: 1fr;
+    display: block;
     overflow-y: auto;
   }
   .stage,
   .config-col {
+    display: block;
     overflow: visible;
   }
 }
