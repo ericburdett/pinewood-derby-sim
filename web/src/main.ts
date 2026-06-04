@@ -76,7 +76,17 @@ async function main(): Promise<void> {
   const inspectionList = el<HTMLUListElement>("inspection");
   function renderInspection(): void {
     inspectionList.replaceChildren();
-    for (const r of legalityReport(controls.read())) {
+    let rules: ReturnType<typeof legalityReport>;
+    try {
+      rules = legalityReport(controls.read());
+    } catch (err) {
+      // A mismatched/stale engine bundle (e.g. an old vendored zip) must NEVER brick setup:
+      // throwing here would abort main() before the Race button's submit handler is wired,
+      // leaving the form free to reload the page on every Race press (the GH Pages bug).
+      console.error("inspection unavailable:", err);
+      return;
+    }
+    for (const r of rules) {
       const li = document.createElement("li");
       li.className = r.ok ? "ok" : "bad";
       li.dataset.rule = r.rule;
@@ -129,7 +139,14 @@ async function main(): Promise<void> {
       return;
     }
     clearError();
-    const view = race(state);
+    let view: ReturnType<typeof race>;
+    try {
+      view = race(state);
+    } catch (err) {
+      console.error("race failed:", err);
+      showError("The simulator couldn't run this design — try reloading the page.");
+      return;
+    }
     renderResult(view);
     // Hide any stale telemetry, animate the run in the always-visible race box, then reveal
     // the telemetry below it once the animation finishes (animator.play handles reduced motion).
